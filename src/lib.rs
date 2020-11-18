@@ -3,7 +3,7 @@ mod tensors;
 mod generators;
 mod random;
 
-pub use tensors::Tensor;
+pub use tensors::*;
 
 pub fn arange<T>(start: T, end: T, step: T) -> Vec<T>
 where

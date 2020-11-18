@@ -1,19 +1,28 @@
-use crate::types::Shape;
+use crate::Shape;
 use crate::types::TData;
 use std::str::FromStr;
 
 type TensorValueGenerator = dyn Fn(&Shape) -> TData;
 
+pub enum TensorComponentType {
+    Value,
+    Axis
+}
+
+pub trait TensorComponent {}
+
+
+
 fn makeTensor(shape: Shape, generator: &TensorValueGenerator, at_coords: Option<&Shape>) -> Tensor {
     let mut out_tensor = Tensor {
-        t_shape: shape,
+        shape: shape,
         values: vec![],
         sub_axis: vec![],
     };
 
-    if out_tensor.t_shape.len() > 1 {
-        for axis in 0..out_tensor.t_shape[0] {
-            out_tensor.sub_axis.push(Box::new(makeTensor(vec![*out_tensor.t_shape.last().unwrap()], generator, at_coords)));
+    if out_tensor.shape.len() > 1 {
+        for axis in 0..out_tensor.shape[0] {
+            out_tensor.sub_axis.push(Box::new(makeTensor(vec![*out_tensor.shape.last().unwrap()], generator, at_coords)));
         }
     } else {
         out_tensor.values.push(generator(at_coords.unwrap()));
@@ -22,13 +31,14 @@ fn makeTensor(shape: Shape, generator: &TensorValueGenerator, at_coords: Option<
     out_tensor
 }
 
-
 #[derive(Debug)]
 pub struct Tensor {
     values: Vec<TData>,
     sub_axis: Vec<Box<Tensor>>,
-    t_shape: Shape,
+    shape: Shape,
 }
+
+impl TensorComponent for Tensor {}
 
 impl Tensor {
     pub fn new(shape: Shape, generator: Option<&TensorValueGenerator>) -> Self {
@@ -44,20 +54,24 @@ impl Tensor {
         }
 
         Tensor {
-            t_shape: shape,
+            shape,
             values,
             sub_axis: vec![],
         }
     }
 
+    pub fn at(&self, coords: Shape) {
+
+    }
+
     /// Gets the shape of this tensor
     pub fn shape(&self) -> &Shape {
-        &self.t_shape
+        &self.shape
     }
 
     /// Reshapes this tensor into a different shape. The new shape must be coherent
     /// with the number of values contained by the current one.
-    pub fn reshape(&self) {}
+    pub fn reshape(&self, t_shape: Shape) {}
 
     /// Returns a flattened vector with all the tensor values
     pub fn flatten(&self) {}
