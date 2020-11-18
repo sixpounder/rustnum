@@ -1,5 +1,7 @@
-mod types;
+#[macro_use]
 mod tensors;
+
+mod types;
 mod generators;
 mod random;
 
