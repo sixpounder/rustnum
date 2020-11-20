@@ -14,6 +14,14 @@ impl From<Vec<usize>> for Shape {
     }
 }
 
+impl From<&[usize]> for Shape {
+    fn from(src: &[usize]) -> Self {
+        Self {
+            dimensions: Vec::from(src)
+        }
+    }
+}
+
 impl PartialEq<Self> for Shape {
     fn eq(&self, other: &Self) -> bool {
         for i in 0..self.dimensions.len() {
@@ -42,11 +50,28 @@ impl PartialEq<Vec<usize>> for Shape {
     }
 }
 
+impl Clone for Shape {
+    fn clone(&self) -> Self {
+        let mut dimensions: Vec<usize> = vec![];
+        self.dimensions.iter().for_each(|dim| { dimensions.push(*dim); });
+
+        Self {
+            dimensions
+        }
+    }
+}
+
 impl Eq for Shape {}
 
 impl Shape {
     pub fn new(dimensions: Vec<usize>) -> Self {
         Self::from(dimensions)
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            dimensions: vec![]
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -55,6 +80,35 @@ impl Shape {
 
     pub fn last(&self) -> Option<&usize> {
         self.dimensions.last()
+    }
+
+    pub fn tail(&self) -> Shape {
+        let slice: &[usize];
+        if self.len() > 1 {
+            slice = self.dimensions[1..self.dimensions.len()].as_ref();
+        } else {
+            slice = &[];
+        }
+        Shape::from(slice)
+    }
+
+    pub fn head(&self) -> Shape {
+        if self.len() > 0 {
+            Shape::new(vec![self.dimensions[0]])
+        } else {
+            Shape::empty()
+        }
+    }
+
+    pub fn replace_last(&self, value: usize) -> Shape {
+        let mut t = self.tail();
+        t.dimensions.push(value);
+
+        t
+    }
+
+    pub fn append(&mut self, value: usize) {
+        self.dimensions.push(value);
     }
 
     pub fn iter(&self) -> Iter<'_, usize> {

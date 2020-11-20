@@ -1,6 +1,5 @@
 use crate::Shape;
 use crate::types::TData;
-use std::str::FromStr;
 
 type TensorValueGenerator = dyn Fn(&Shape) -> TData;
 
@@ -11,23 +10,37 @@ pub enum TensorComponentType {
 
 pub trait TensorComponent {}
 
-
-
-fn makeTensor(shape: Shape, generator: &TensorValueGenerator, at_coords: Option<&Shape>) -> Tensor {
+fn make_tensor(shape: Shape, generator: &TensorValueGenerator, at_coords: Option<&Shape>) -> Tensor {
     let mut values = vec![];
     let mut sub_axis = vec![];
     if shape.len() > 1 {
         for axis in 0..shape[0] {
-            sub_axis.push(Box::new(makeTensor(Shape::from(vec![*shape.last().unwrap()]), generator, at_coords)));
+            let next_coord = match at_coords {
+                Some(c) => {
+                    let mut new_shape = c.clone();
+                    new_shape.append(axis);
+                    new_shape
+                }
+                None => {
+                    Shape::new(vec![axis])
+                }
+            };
+
+            sub_axis.push(Box::new(make_tensor(shape.tail(), generator, Some(&next_coord))));
         }
     } else {
-        values.push(generator(at_coords.unwrap()));
+        match at_coords {
+            Some(coords) => {
+                values.push(generator(&coords));
+            },
+            None => ()
+        }
     }
 
     let out_tensor = Tensor {
         shape,
         values,
-        sub_axis: Some(sub_axis),
+        sub_axis: if sub_axis.len() > 0 { Some(sub_axis) } else { None },
     };
 
     out_tensor
@@ -44,25 +57,10 @@ impl TensorComponent for Tensor {}
 
 impl Tensor {
     pub fn new(shape: Shape, generator: Option<&TensorValueGenerator>) -> Self {
-        // makeTensor(shape, generator.unwrap_or(&|_| 0.0 ), None)
-        let mut n_values = 1;
-        shape.iter().for_each(|i| { n_values *= i } );
-
-        let mut values = vec![];
-        let spawn_value = generator.unwrap_or(&|coords| f64::from_str(&coords[0].to_string()).unwrap());
-
-        for i in 0..n_values {
-            values.push(spawn_value(&Shape::from(vec![i])));
-        }
-
-        Tensor {
-            shape,
-            values,
-            sub_axis: Some(vec![]),
-        }
+        make_tensor(shape, generator.unwrap_or(&|_| 0.0 ), None)
     }
 
-    pub fn at(&self, coords: Shape) {
+    pub fn at(&self, _coords: Shape) {
 
     }
 
