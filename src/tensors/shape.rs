@@ -74,12 +74,37 @@ impl Shape {
         }
     }
 
+    pub fn zeroes(n_dimensions: usize) -> Self {
+        let mut dimensions = Vec::with_capacity(n_dimensions);
+        for i in 0..n_dimensions {
+            dimensions.push(0);
+        }
+
+        Self {
+            dimensions
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.dimensions.len()
     }
 
+    pub fn first(&self) -> Option<&usize> {
+        self.dimensions.first()
+    }
+
     pub fn last(&self) -> Option<&usize> {
         self.dimensions.last()
+    }
+
+    pub fn includes(&self, other: &Shape) -> bool {
+        for i in 0..self.dimensions.len() {
+            if self.dimensions[i] < other.dimensions[i] {
+                return false;
+            }
+        }
+
+        true
     }
 
     pub fn tail(&self) -> Shape {
@@ -111,18 +136,30 @@ impl Shape {
         self.dimensions.push(value);
     }
 
-    pub fn iter(&self) -> Iter<'_, usize> {
+    pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.dimensions.iter()
     }
 
     pub fn mul(&self) -> usize {
         let mut p = 1;
-        self.dimensions.iter().for_each(|i| { p *= i });
+        self.dimensions.iter().for_each(|i| { p = p * i; });
         p
+    }
+
+    pub fn pos(&self) -> usize {
+        0
     }
 
     pub fn equiv(&self, other: &Self) -> bool {
         self.mul() == other.mul()
+    }
+
+    pub fn iter(&self) -> ShapeIterator {
+        ShapeIterator {
+            shape: self,
+            curr: Shape::zeroes(self.len()),
+            next: Shape::zeroes(self.len()),
+        }
     }
 }
 
@@ -130,5 +167,27 @@ impl Index<usize> for Shape {
     type Output = usize;
     fn index(&self, idx: usize) -> &<Self as std::ops::Index<usize>>::Output {
         &self.dimensions[idx]
+    }
+}
+
+pub struct ShapeIterator<'a> {
+    shape: &'a Shape,
+    curr: Shape,
+    next: Shape
+}
+
+pub struct ShapeIter<'a, T> {
+    pub coords: &'a Shape,
+    pub value: T
+}
+
+impl<'a> Iterator for ShapeIterator<'a> {
+    type Item = ShapeIter<'a, usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(ShapeIter {
+            value: 0,
+            coords: self.shape
+        })
     }
 }

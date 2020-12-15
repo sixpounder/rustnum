@@ -7,7 +7,7 @@ macro_rules! shape {
             $(
                 dims.push($x);
             )*
-            let mut o = Shape::new(dims);
+            let o = Shape::new(dims);
             o
         }
     };

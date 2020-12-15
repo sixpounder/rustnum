@@ -1,7 +1,12 @@
-use crate::Shape;
+use crate::{Shape, generators};
 use crate::types::TData;
 
-type TensorValueGenerator = dyn Fn(&Shape) -> TData;
+type TensorValueGenerator<T> = dyn Fn(&Shape) -> T;
+
+pub struct TensorIter {
+    coords: Shape,
+    value: TData
+}
 
 pub enum TensorComponentType {
     Value,
@@ -10,58 +15,41 @@ pub enum TensorComponentType {
 
 pub trait TensorComponent {}
 
-fn make_tensor(shape: Shape, generator: &TensorValueGenerator, at_coords: Option<&Shape>) -> Tensor {
-    let mut values = vec![];
-    let mut sub_axis = vec![];
-    if shape.len() > 1 {
-        for axis in 0..shape[0] {
-            let next_coord = match at_coords {
-                Some(c) => {
-                    let mut new_shape = c.clone();
-                    new_shape.append(axis);
-                    new_shape
-                }
-                None => {
-                    Shape::new(vec![axis])
-                }
-            };
+fn make_tensor<T: Default + Copy>(shape: Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
+    let mut values: Vec<T> = Vec::with_capacity(shape.mul());
 
-            sub_axis.push(Box::new(make_tensor(shape.tail(), generator, Some(&next_coord))));
-        }
-    } else {
-        match at_coords {
-            Some(coords) => {
-                values.push(generator(&coords));
-            },
-            None => ()
-        }
+    for i in shape.iter() {
+        values.insert(i.coords.mul(), generator(i.coords));
     }
 
-    let out_tensor = Tensor {
+    let out_tensor: Tensor<T> = Tensor {
         shape,
         values,
-        sub_axis: if sub_axis.len() > 0 { Some(sub_axis) } else { None },
     };
 
     out_tensor
 }
 
 #[derive(Debug)]
-pub struct Tensor {
-    values: Vec<TData>,
-    sub_axis: Option<Vec<Box<Tensor>>>,
+pub struct Tensor<T: std::default::Default> {
+    values: Vec<T>,
     shape: Shape,
 }
 
-impl TensorComponent for Tensor {}
+impl<T: std::default::Default> TensorComponent for Tensor<T> {}
 
-impl Tensor {
-    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator>) -> Self {
-        make_tensor(shape, generator.unwrap_or(&|_| 0.0 ), None)
+impl<T: Default + Copy> Tensor<T> {
+    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
+        make_tensor(shape, generator.unwrap_or(&|_| T::default() ))
     }
 
-    pub fn at(&self, _coords: Shape) {
-
+    pub fn at(&self, coords: Shape) -> Option<T> {
+        match self.values.get(coords.mul()) {
+            Some(_value) => {
+                Some(self.values[coords.mul()])
+            },
+            None => None
+        }
     }
 
     /// Gets the shape of this tensor
@@ -71,28 +59,63 @@ impl Tensor {
 
     /// Reshapes this tensor into a different shape. The new shape must be coherent
     /// with the number of values contained by the current one.
-    pub fn reshape(&self, t_shape: Shape) {}
-
-    /// Returns a flattened vector with all the tensor values
-    pub fn flatten(&self) -> Tensor {
-        Tensor {
-            shape: Shape::from(vec![self.shape.mul()]),
-            values: vec![],
-            sub_axis: None
+    pub fn reshape(&mut self, t_shape: &Shape) {
+        if self.shape.equiv(t_shape) {
+            self.shape = t_shape.clone();
         }
     }
 
-    /// Runs `predicate` on every value of the tensor, creating a new tensor with
-    /// values obtained from the `predicate` returned ones
-    pub fn map<F>(&self, _predicate: F) where F: Fn(Shape, TData) -> TData {}
+    /// Returns a flattened tensor with all the tensor values copied inside it.
+    /// This is equivalent to reshaping the tensor to a single dimension equal to the
+    /// multiplication of all the axis and cloning it
+    pub fn to_flat(&self) -> Tensor<T> {
+        Tensor {
+            shape: Shape::from(vec![self.shape.mul()]),
+            values: self.values.clone(),
+        }
+    }
+
+    /// Returns a flattened vector with all the tensor values copied inside it
+    pub fn to_vec(&self) -> Vec<T> {
+        self.values.clone()
+    }
+
+    fn pos_for(&self, coords: &Shape) -> usize {
+        for dim in coords.iter_axis() {
+            
+        }
+    }
 }
+
+// impl Iterator for Tensor {
+//     type Item = TensorIter;
+//     fn next(&mut self) -> std::option::Option<<Self as std::iter::Iterator>::Item> {
+//         let mut current_tensor = self;
+//         let mut current_coords = vec![];
+//         let mut axis_index = 0;
+//         let mut axis = current_tensor.sub_axis.as_ref().unwrap_or(vec![]);
+//         while axis.len() > 0 {
+//             if i == current_tensor.shape().len() - 1 {
+//                 return Some(TensorIter {
+//                     coords: Shape::from(current_coords),
+//                     value: current_tensor.values[i]
+//                 });
+//             } else {
+//                 axis = current_tensor.sub_axis.as_ref().unwrap_or(vec![]);
+//                 i += 1;
+//             }
+//         }
+//         None
+//     }
+// }
 
 #[cfg(test)]
 mod test {
     use super::*;
     #[test]
     fn tensor_new() {
-        let t = Tensor::new(shape!(2, 4), None);
-        assert_eq!(t.shape(), &shape!(2, 4));
+        let t = Tensor::new(shape!(2, 4, 3), Some(&|shape| { shape.mul() as f64 }));
+        assert_eq!(t.shape(), &shape!(2, 4, 3));
+        assert_eq!(t.at(shape!(0, 1, 1)), Some(24.0));
     }
 }
