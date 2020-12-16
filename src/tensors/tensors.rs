@@ -16,10 +16,14 @@ pub enum TensorComponentType {
 pub trait TensorComponent {}
 
 fn make_tensor<T: Default + Copy>(shape: Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
-    let mut values: Vec<T> = Vec::with_capacity(shape.mul());
+    let shape_card = shape.mul();
+    let mut values: Vec<T> = Vec::with_capacity(shape_card);
+    
+    // `set_len` would be faster, but unsafe. Consider using it for better performance?
+    values.resize(shape_card, T::default());
 
     for i in shape.iter() {
-        values.insert(i.coords.mul(), generator(i.coords));
+        values[pos_for(&shape, i.coords)] = generator(i.coords);
     }
 
     let out_tensor: Tensor<T> = Tensor {
@@ -43,13 +47,9 @@ impl<T: Default + Copy> Tensor<T> {
         make_tensor(shape, generator.unwrap_or(&|_| T::default() ))
     }
 
-    pub fn at(&self, coords: Shape) -> Option<T> {
-        match self.values.get(coords.mul()) {
-            Some(_value) => {
-                Some(self.values[coords.mul()])
-            },
-            None => None
-        }
+    pub fn at(&self, coords: Shape) -> Option<&T> {
+        let predicted_value = self.values.get(self.index_for_coords(&coords));
+        predicted_value
     }
 
     /// Gets the shape of this tensor
@@ -80,11 +80,20 @@ impl<T: Default + Copy> Tensor<T> {
         self.values.clone()
     }
 
-    fn pos_for(&self, coords: &Shape) -> usize {
-        for dim in coords.iter_axis() {
-            
-        }
+    /// Internal utility function for estabilishin a flattened index to assign
+    /// coords to
+    fn index_for_coords(&self, coords: &Shape) -> usize {
+        pos_for(&self.shape, coords)
     }
+}
+
+fn pos_for(shape: &Shape, coords: &Shape) -> usize {
+    let mut idx = 0;
+    for axis in coords.iter_axis() {
+        idx += shape.axis_cardinality(*axis).unwrap_or(&0) * axis;
+    }
+
+    idx
 }
 
 // impl Iterator for Tensor {
@@ -114,8 +123,14 @@ mod test {
     use super::*;
     #[test]
     fn tensor_new() {
-        let t = Tensor::new(shape!(2, 4, 3), Some(&|shape| { shape.mul() as f64 }));
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|shape| { shape.mul() as f64 }));
         assert_eq!(t.shape(), &shape!(2, 4, 3));
-        assert_eq!(t.at(shape!(0, 1, 1)), Some(24.0));
+    }
+
+    #[test]
+    fn tensor_at() {
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|shape| { shape.mul() as f64 }));
+        let test_value = t.at(shape!(0, 1, 1));
+        assert_eq!(test_value, Some(&24.0));
     }
 }
