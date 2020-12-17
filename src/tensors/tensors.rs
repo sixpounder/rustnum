@@ -1,4 +1,6 @@
-use crate::{Shape, generators};
+use std::ops::Index;
+
+use crate::{Coord, Shape};
 use crate::types::TData;
 
 type TensorValueGenerator<T> = dyn Fn(&Shape) -> T;
@@ -15,6 +17,15 @@ pub enum TensorComponentType {
 
 pub trait TensorComponent {}
 
+fn pos_for(shape: &Shape, coords: &Shape) -> usize {
+    let mut idx = 0;
+    for axis in coords.iter_axis() {
+        idx += shape.axis_cardinality(*axis).unwrap_or(&0) * axis;
+    }
+
+    idx
+}
+
 fn make_tensor<T: Default + Copy>(shape: Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
     let shape_card = shape.mul();
     let mut values: Vec<T> = Vec::with_capacity(shape_card);
@@ -23,7 +34,7 @@ fn make_tensor<T: Default + Copy>(shape: Shape, generator: &TensorValueGenerator
     values.resize(shape_card, T::default());
 
     for i in shape.iter() {
-        values[pos_for(&shape, i.coords)] = generator(i.coords);
+        values[pos_for(&shape, &i)] = generator(&i);
     }
 
     let out_tensor: Tensor<T> = Tensor {
@@ -35,21 +46,52 @@ fn make_tensor<T: Default + Copy>(shape: Shape, generator: &TensorValueGenerator
 }
 
 #[derive(Debug)]
-pub struct Tensor<T: std::default::Default> {
+pub struct Tensor<T> {
     values: Vec<T>,
     shape: Shape,
 }
 
 impl<T: std::default::Default> TensorComponent for Tensor<T> {}
 
-impl<T: Default + Copy> Tensor<T> {
-    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
-        make_tensor(shape, generator.unwrap_or(&|_| T::default() ))
+impl<T> Tensor<T> {
+    /// Internal utility function for estabilishin a flattened index to assign
+    /// coords to
+    fn index_for_coords(&self, coords: &Shape) -> Option<usize> {
+        let idx = pos_for(&self.shape, coords);
+        if self.values.len() > idx {
+            Some(idx)
+        } else {
+            None
+        }
     }
 
     pub fn at(&self, coords: Shape) -> Option<&T> {
-        let predicted_value = self.values.get(self.index_for_coords(&coords));
-        predicted_value
+        let idx = self.index_for_coords(&coords);
+        match idx {
+            Some(index) => {
+                self.values.get(index)
+            },
+            None => None
+        }
+    }
+
+    pub fn set(&mut self, coords: Coord, value: T) -> Result<(), ()> {
+        let idx = self.index_for_coords(&coords);
+        match idx {
+            Some(index) => {
+                self.values[index] = value;
+                Ok(())
+            },
+            None => Err(())
+        }
+    }
+}
+
+impl<T: Default + Copy> Tensor<T> {
+
+    /// Creates a new tensor
+    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
+        make_tensor(shape, generator.unwrap_or(&|_| T::default() ))
     }
 
     /// Gets the shape of this tensor
@@ -79,47 +121,20 @@ impl<T: Default + Copy> Tensor<T> {
     pub fn to_vec(&self) -> Vec<T> {
         self.values.clone()
     }
-
-    /// Internal utility function for estabilishin a flattened index to assign
-    /// coords to
-    fn index_for_coords(&self, coords: &Shape) -> usize {
-        pos_for(&self.shape, coords)
-    }
 }
 
-fn pos_for(shape: &Shape, coords: &Shape) -> usize {
-    let mut idx = 0;
-    for axis in coords.iter_axis() {
-        idx += shape.axis_cardinality(*axis).unwrap_or(&0) * axis;
+impl<T> Index<Coord> for Tensor<T> {
+    type Output = T;
+
+    fn index(&self, index: Coord) -> &Self::Output {
+        self.at(index).unwrap()
     }
-
-    idx
 }
-
-// impl Iterator for Tensor {
-//     type Item = TensorIter;
-//     fn next(&mut self) -> std::option::Option<<Self as std::iter::Iterator>::Item> {
-//         let mut current_tensor = self;
-//         let mut current_coords = vec![];
-//         let mut axis_index = 0;
-//         let mut axis = current_tensor.sub_axis.as_ref().unwrap_or(vec![]);
-//         while axis.len() > 0 {
-//             if i == current_tensor.shape().len() - 1 {
-//                 return Some(TensorIter {
-//                     coords: Shape::from(current_coords),
-//                     value: current_tensor.values[i]
-//                 });
-//             } else {
-//                 axis = current_tensor.sub_axis.as_ref().unwrap_or(vec![]);
-//                 i += 1;
-//             }
-//         }
-//         None
-//     }
-// }
 
 #[cfg(test)]
 mod test {
+    use crate::generators;
+
     use super::*;
     #[test]
     fn tensor_new() {
@@ -129,8 +144,10 @@ mod test {
 
     #[test]
     fn tensor_at() {
-        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|shape| { shape.mul() as f64 }));
+        let generator: &TensorValueGenerator<f64> = &|coord| { println!("{:?}", coord); coord.mul() as f64 };
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         let test_value = t.at(shape!(0, 1, 1));
+        println!("{:?}", t.values);
         assert_eq!(test_value, Some(&24.0));
     }
 }

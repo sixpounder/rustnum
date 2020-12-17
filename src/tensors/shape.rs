@@ -143,12 +143,22 @@ impl Shape {
         t
     }
 
+    /// Appends an axis to this shape
     pub fn append(&mut self, value: usize) {
         self.dimensions.push(value);
+        self.scale_factors = compute_scale_factors(&self.dimensions);
     }
 
     pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.dimensions.iter()
+    }
+
+    pub fn get_axis(&self, idx: usize) -> Option<&usize> {
+        self.dimensions.get(idx)
+    }
+
+    pub fn get_axis_mut(&mut self, idx: usize) -> Option<&mut usize> {
+        self.dimensions.get_mut(idx)
     }
 
     pub fn mul(&self) -> usize {
@@ -170,6 +180,7 @@ impl Shape {
     pub fn iter(&self) -> ShapeIterator {
         ShapeIterator {
             shape: self,
+            started: true,
             curr_coord: Shape::zeroes(self.len()),
         }
     }
@@ -188,44 +199,71 @@ impl IndexMut<usize> for Shape {
     }
 }
 
+pub type Coord = Shape;
+pub type ShapeIter = Coord;
+
 pub struct ShapeIterator<'a> {
     shape: &'a Shape,
-    curr_coord: Shape,
-}
-
-pub struct ShapeIter<'a> {
-    pub coords: &'a Shape
+    started: bool,
+    curr_coord: Coord,
 }
 
 impl<'a> Iterator for ShapeIterator<'a> {
-    type Item = ShapeIter<'a>;
+    type Item = Coord;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut out_value = None;
-        for i_rev in (self.shape.dimensions.len() - 1)..0 {
-            let current_axis_value = self.curr_coord[i_rev];
-            if current_axis_value < self.shape[i_rev] {
-                self.curr_coord[i_rev] = self.curr_coord[i_rev] + 1;
-                break;
+        if self.started {
+            self.started = false;
+            Some(
+                self.curr_coord.clone()
+            )
+        } else {
+            let mut out_value = None;
+            let mut end_of_shape = false;
+            let mut i = self.shape.len() - 1;
+            while let Some(coordinate) = self.curr_coord.get_axis_mut(i) {
+                if *coordinate < (self.shape[i] - 1) {
+                    // Can move on this axis
+                    *coordinate = *coordinate + 1;
+    
+                    // If the axis is NOT the last one, we must reset all contained axis
+                    if i < self.shape.len() - 1 {
+                        for j in 0..(self.shape.len() - 1) {
+                            self.curr_coord[j] = 0;
+                        }
+                    } else {
+                        end_of_shape = true;
+                    }
+    
+                    break;
+                } else {
+                    // Axis is done, check the next one
+                    let coordinate = self.curr_coord.get_axis_mut(i - 1);
+                }
+                i -= 1;
             }
+    
+            if !end_of_shape {
+                out_value = Some(
+                    self.curr_coord.clone()
+                );
+            }
+    
+            out_value
         }
-        out_value = Some(ShapeIter {
-            coords: self.shape,
-        });
-
-        out_value
     }
 }
 
+/// Utility to compute axis cardinalities for later use
 fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
     let mut scale_factors = Vec::with_capacity(dimensions.len());
     let mut i = 0;
     while i < dimensions.len() {
         if i == dimensions.len() - 1 {
-            // Last item
+            // Last axis is always 1
             scale_factors.push(1);
         } else {
-            let rng = i..dimensions.len();
+            let rng = (i + 1)..dimensions.len();
             let mut factor = 1;
             dimensions[rng].iter().for_each(|f| {
                 factor *= f;
@@ -237,4 +275,25 @@ fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
     }
 
     scale_factors
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{shape};
+
+    use super::*;
+
+    #[test]
+    pub fn scale_factors() {
+        let s = shape!(3, 4);
+        assert_eq!(s.scale_factors[0], 4);
+        assert_eq!(s.scale_factors[1], 1);
+    }
+
+    #[test]
+    pub fn coordinates_iter() {
+        let mut s = shape!(3, 4);
+        let mut all_coords: Vec<Shape> = s.iter().collect();
+        assert_eq!(all_coords.len(), 12);
+    }
 }
