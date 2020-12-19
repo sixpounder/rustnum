@@ -182,6 +182,7 @@ impl Shape {
             shape: self,
             started: true,
             curr_coord: Shape::zeroes(self.len()),
+            next_coord: Some(Shape::zeroes(self.len()))
         }
     }
 }
@@ -206,50 +207,69 @@ pub struct ShapeIterator<'a> {
     shape: &'a Shape,
     started: bool,
     curr_coord: Coord,
+    next_coord: Option<Coord>
 }
 
-impl<'a> Iterator for ShapeIterator<'a> {
-    type Item = Coord;
+impl<'a> ShapeIterator<'a> {
+    fn has_next(&self) -> bool {
+        self.next_coord.is_some()
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn step_forward(&mut self) {
         if self.started {
             self.started = false;
-            Some(
-                self.curr_coord.clone()
-            )
         } else {
-            let mut out_value = None;
             let mut end_of_shape = false;
-            let mut i = self.shape.len() - 1;
+            let shape_last_index = self.shape.len() - 1;
+            let mut i = shape_last_index;
             while let Some(coordinate) = self.curr_coord.get_axis_mut(i) {
                 if *coordinate < (self.shape[i] - 1) {
                     // Can move on this axis
                     *coordinate = *coordinate + 1;
     
                     // If the axis is NOT the last one, we must reset all contained axis
-                    if i < self.shape.len() - 1 {
-                        for j in 0..(self.shape.len() - 1) {
+                    if i < shape_last_index {
+                        let reset_rng = (i + 1)..=shape_last_index;
+                        for j in reset_rng {
                             self.curr_coord[j] = 0;
                         }
-                    } else {
-                        end_of_shape = true;
                     }
     
                     break;
                 } else {
-                    // Axis is done, check the next one
-                    let coordinate = self.curr_coord.get_axis_mut(i - 1);
+                    if i == 0 {
+                        // Axis is done and there are no more axis, shape ended
+                        end_of_shape = true;
+                        break;
+                    } else {
+                        // Axis is done, check the next one
+                        i -= 1;
+                        continue;
+                    }
                 }
-                i -= 1;
             }
     
-            if !end_of_shape {
-                out_value = Some(
-                    self.curr_coord.clone()
-                );
+            if end_of_shape {
+                self.next_coord = None;
+            } else {
+                self.next_coord = Some(self.curr_coord.clone());
             }
-    
-            out_value
+        }
+    }
+}
+
+impl<'a> Iterator for ShapeIterator<'a> {
+    type Item = Coord;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.step_forward();
+        if !self.has_next() {
+            None
+        } else {
+            let next = self.next_coord.as_ref().unwrap();
+            Some(
+                next.clone()
+            )
         }
     }
 }
@@ -292,8 +312,8 @@ mod test {
 
     #[test]
     pub fn coordinates_iter() {
-        let mut s = shape!(3, 4);
+        let mut s = shape!(3, 4, 9);
         let mut all_coords: Vec<Shape> = s.iter().collect();
-        assert_eq!(all_coords.len(), 12);
+        assert_eq!(all_coords.len(), 108);
     }
 }

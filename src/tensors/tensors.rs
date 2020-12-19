@@ -133,8 +133,6 @@ impl<T> Index<Coord> for Tensor<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::generators;
-
     use super::*;
     #[test]
     fn tensor_new() {
@@ -144,10 +142,10 @@ mod test {
 
     #[test]
     fn tensor_at() {
-        let generator: &TensorValueGenerator<f64> = &|coord| { println!("{:?}", coord); coord.mul() as f64 };
+        let generator: &TensorValueGenerator<f64> = &|coord| { coord.mul() as f64 };
         let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
-        let test_value = t.at(shape!(0, 1, 1));
-        println!("{:?}", t.values);
-        assert_eq!(test_value, Some(&24.0));
+        assert_eq!(t.shape(), &shape!(2, 4, 3));
+        let test_value = t.at(shape!(1, 2, 2));
+        assert_eq!(test_value, Some(&4.0));
     }
 }
