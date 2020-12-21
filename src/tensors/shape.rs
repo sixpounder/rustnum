@@ -1,8 +1,9 @@
 use std::ops::{Index, IndexMut};
 use std::slice::Iter;
 
-use crate::{Coord, CoordIterator};
+use crate::{CoordIterator};
 
+/// A shape is a description of a space with `n` independent dimensions
 #[derive(Debug)]
 pub struct Shape {
     dimensions: Vec<usize>,
@@ -67,6 +68,7 @@ impl Clone for Shape {
 impl Eq for Shape {}
 
 impl Shape {
+    /// Creates a new shape with some `dimensions`
     pub fn new(dimensions: Vec<usize>) -> Self {
         if dimensions.iter().any(|f| *f == 0) {
             panic!("Zero value dimensions are not allowed in shapes");
@@ -79,45 +81,7 @@ impl Shape {
         }
     }
 
-    pub fn next_coord(shape: &Shape, from: &Shape) -> Option<Shape> {
-        let mut end_of_shape = false;
-        let mut coord = from.clone();
-        let shape_last_index = shape.len() - 1;
-        let mut i = shape_last_index;
-        while let Some(coordinate) = coord.get_axis_mut(i) {
-            if *coordinate < (shape[i] - 1) {
-                // Can move on this axis
-                *coordinate = *coordinate + 1;
-    
-                // If the axis is NOT the last one, we must reset all contained axis
-                if i < shape_last_index {
-                    let reset_rng = (i + 1)..=shape_last_index;
-                    for j in reset_rng {
-                        coord[j] = 0;
-                    }
-                }
-    
-                break;
-            } else {
-                if i == 0 {
-                    // Axis is done and there are no more axis, shape ended
-                    end_of_shape = true;
-                    break;
-                } else {
-                    // Axis is done, check the next one
-                    i -= 1;
-                    continue;
-                }
-            }
-        }
-    
-        if end_of_shape {
-            None
-        } else {
-            Some(from.clone())
-        }
-    }
-
+    /// Creates an empty shape
     pub fn empty() -> Self {
         Self {
             dimensions: vec![],
@@ -125,6 +89,7 @@ impl Shape {
         }
     }
 
+    /// Creates a shape with `n_dimensions` set to 0
     pub fn zeroes(n_dimensions: usize) -> Self {
         let mut dimensions = Vec::with_capacity(n_dimensions);
         for i in 0..n_dimensions {
@@ -139,18 +104,22 @@ impl Shape {
         }
     }
 
+    /// The number of dimension of this shape
     pub fn len(&self) -> usize {
         self.dimensions.len()
     }
 
+    /// Returns the first dimension of this shape
     pub fn first(&self) -> Option<&usize> {
         self.dimensions.first()
     }
 
+    /// Returns the last dimension of this shape
     pub fn last(&self) -> Option<&usize> {
         self.dimensions.last()
     }
 
+    /// Returns `true` if some `other` shape is contained by this shape
     pub fn includes(&self, other: &Shape) -> bool {
         for i in 0..self.dimensions.len() {
             if self.dimensions[i] < other.dimensions[i] {
@@ -194,18 +163,22 @@ impl Shape {
         self.scale_factors = compute_scale_factors(&self.dimensions);
     }
 
+    /// Returns an iterator over the shape's axis
     pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.dimensions.iter()
     }
 
+    /// Get the axis with index `idx`
     pub fn get_axis(&self, idx: usize) -> Option<&usize> {
         self.dimensions.get(idx)
     }
 
+    /// Get the axis with index `idx` as mutable
     pub fn get_axis_mut(&mut self, idx: usize) -> Option<&mut usize> {
         self.dimensions.get_mut(idx)
     }
 
+    /// The cardinality of this shape
     pub fn mul(&self) -> usize {
         let mut p = 1;
         self.dimensions.iter().for_each(|i| {
@@ -214,21 +187,18 @@ impl Shape {
         p
     }
 
+    /// The cardinality of a single axis in this shape
     pub fn axis_cardinality(&self, axis: usize) -> Option<&usize> {
         self.scale_factors.get(axis)
     }
 
+    /// Returns 'true` if some `other` shape has the same cardinality as this shape
     pub fn equiv(&self, other: &Self) -> bool {
         self.mul() == other.mul()
     }
 
+    /// An iterator over all the coordinates contained by this shape
     pub fn iter(&self) -> CoordIterator {
-        // ShapeIterator {
-        //     shape: self,
-        //     started: true,
-        //     curr_coord: Coord::zeroes(self.len()),
-        //     next_coord: Some(Coord::zeroes(self.len()))
-        // }
         CoordIterator::new(self)
     }
 }
@@ -245,77 +215,6 @@ impl IndexMut<usize> for Shape {
         &mut self.dimensions[idx]
     }
 }
-
-// pub struct ShapeIterator<'a> {
-//     shape: &'a Shape,
-//     started: bool,
-//     curr_coord: Coord,
-//     next_coord: Option<Coord>
-// }
-
-// impl<'a> ShapeIterator<'a> {
-//     fn has_next(&self) -> bool {
-//         self.next_coord.is_some()
-//     }
-
-//     fn step_forward(&mut self) {
-//         if self.started {
-//             self.started = false;
-//         } else {
-//             let mut end_of_shape = false;
-//             let shape_last_index = self.shape.len() - 1;
-//             let mut i = shape_last_index;
-//             while let Some(coordinate) = self.curr_coord.get_axis_mut(i) {
-//                 if *coordinate < (self.shape[i] - 1) {
-//                     // Can move on this axis
-//                     *coordinate = *coordinate + 1;
-    
-//                     // If the axis is NOT the last one, we must reset all contained axis
-//                     if i < shape_last_index {
-//                         let reset_rng = (i + 1)..=shape_last_index;
-//                         for j in reset_rng {
-//                             self.curr_coord[j] = 0;
-//                         }
-//                     }
-    
-//                     break;
-//                 } else {
-//                     if i == 0 {
-//                         // Axis is done and there are no more axis, shape ended
-//                         end_of_shape = true;
-//                         break;
-//                     } else {
-//                         // Axis is done, check the next one
-//                         i -= 1;
-//                         continue;
-//                     }
-//                 }
-//             }
-    
-//             if end_of_shape {
-//                 self.next_coord = None;
-//             } else {
-//                 self.next_coord = Some(self.curr_coord.clone());
-//             }
-//         }
-//     }
-// }
-
-// impl<'a> Iterator for ShapeIterator<'a> {
-//     type Item = Coord;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.step_forward();
-//         if !self.has_next() {
-//             None
-//         } else {
-//             let next = self.next_coord.as_ref().unwrap();
-//             Some(
-//                 next.clone()
-//             )
-//         }
-//     }
-// }
 
 /// Utility to compute axis cardinalities for later use
 fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
@@ -342,7 +241,7 @@ fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
 
 #[cfg(test)]
 mod test {
-    use crate::{shape};
+    use crate::{shape, Coord};
 
     use super::*;
 

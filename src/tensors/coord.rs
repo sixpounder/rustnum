@@ -59,6 +59,7 @@ impl IndexMut<usize> for Coord {
     }
 }
 
+/// An iterator over a coordinate system in a space described by a `shape`
 pub struct CoordIterator<'a> {
     space: &'a Shape,
     current: Coord,

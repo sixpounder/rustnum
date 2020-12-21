@@ -1,16 +1,12 @@
-use crate::Shape;
-use crate::types::TData;
+use crate::{Shape, Tensor};
 use std::option::Option;
 use std::vec::Vec;
 
-pub fn normal<T>(mean: T, scale: T, size: Option<Shape>) {
-    let d_size = size.unwrap_or(shape![10]);
+pub fn normal<T>(mean: T, scale: T, shape: Option<Shape>)
+where
+    T: Default + Copy,
+{
+    let d_size = shape.unwrap_or(shape![10]);
 
-    let mut distribution = Vec::<TData>::new();
-    let mut dimension = 0;
-
-    while dimension < d_size.len() {
-        dimension += 1;
-    }
-    
+    let mut distribution: Tensor<T> = Tensor::<T>::new(&d_size, None);
 }
