@@ -1,12 +1,12 @@
 use std::ops::{Index, IndexMut};
 
-use crate::{Coord, Shape};
+use crate::{Coord, CoordIterator, Shape};
 
-type TensorValueGenerator<T> = dyn Fn(&Shape, u64) -> T;
+type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
 pub trait TensorComponent {}
 
-fn pos_for(shape: &Shape, coords: &Shape) -> usize {
+fn pos_for(shape: &Shape, coords: &Coord) -> usize {
     let mut idx = 0;
     for axis in coords.iter_axis() {
         idx += shape.axis_cardinality(*axis).unwrap_or(&0) * axis;
@@ -44,9 +44,14 @@ pub struct Tensor<T> {
 impl<T: std::default::Default> TensorComponent for Tensor<T> {}
 
 impl<T> Tensor<T> {
+    /// Gets the shape of this tensor
+    pub fn shape(&self) -> &Shape {
+        &self.shape
+    }
+
     /// Internal utility function for estabilishin a flattened index to assign
     /// coords to
-    fn index_for_coords(&self, coords: &Shape) -> Option<usize> {
+    fn index_for_coords(&self, coords: &Coord) -> Option<usize> {
         let idx = pos_for(&self.shape, coords);
         if self.values.len() > idx {
             Some(idx)
@@ -55,7 +60,7 @@ impl<T> Tensor<T> {
         }
     }
 
-    pub fn at(&self, coords: Shape) -> Option<&T> {
+    pub fn at(&self, coords: Coord) -> Option<&T> {
         let idx = self.index_for_coords(&coords);
         match idx {
             Some(index) => {
@@ -65,7 +70,7 @@ impl<T> Tensor<T> {
         }
     }
 
-    pub fn at_ref(&self, coords: &Shape) -> Option<&T> {
+    pub fn at_ref(&self, coords: &Coord) -> Option<&T> {
         let idx = self.index_for_coords(&coords);
         match idx {
             Some(index) => {
@@ -75,7 +80,7 @@ impl<T> Tensor<T> {
         }
     }
 
-    pub fn at_mut(&mut self, coords: Shape) -> Option<&mut T> {
+    pub fn at_mut(&mut self, coords: Coord) -> Option<&mut T> {
         let idx = self.index_for_coords(&coords);
         match idx {
             Some(index) => {
@@ -97,11 +102,7 @@ impl<T> Tensor<T> {
     }
 
     pub fn iter(&self) -> TensorIterator<T> {
-        TensorIterator {
-            tensor: &self,
-            next_coord: None,
-            started: false
-        }
+        TensorIterator::new(self)
     }
 
     // pub fn sum(&self, other: Tensor<T>) -> Result<Tensor<T>> {
@@ -111,18 +112,7 @@ impl<T> Tensor<T> {
     // }
 }
 
-impl<T: Default + Copy> Tensor<T> {
-
-    /// Creates a new tensor
-    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
-        make_tensor(shape, generator.unwrap_or(&|_, _| T::default() ))
-    }
-
-    /// Gets the shape of this tensor
-    pub fn shape(&self) -> &Shape {
-        &self.shape
-    }
-
+impl<T: Copy> Tensor<T> {
     /// Reshapes this tensor into a different shape. The new shape must be coherent
     /// with the number of values contained by the current one.
     pub fn reshape(&mut self, t_shape: &Shape) {
@@ -144,6 +134,14 @@ impl<T: Default + Copy> Tensor<T> {
     /// Returns a flattened vector with all the tensor values copied inside it
     pub fn to_vec(&self) -> Vec<T> {
         self.values.clone()
+    }
+}
+
+impl<T: Default + Copy> Tensor<T> {
+
+    /// Creates a new tensor
+    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
+        make_tensor(shape, generator.unwrap_or(&|_, _| T::default() ))
     }
 }
 
@@ -171,47 +169,41 @@ impl<T> IndexMut<Coord> for Tensor<T> {
 
 #[derive(Debug, Clone)]
 pub struct TensorIter<'a, T> {
-    coords: Shape,
+    coords: Coord,
     value: &'a T
 }
 
 pub struct TensorIterator<'a, T> {
-    started: bool,
+    // started: bool,
     tensor: &'a Tensor<T>,
-    next_coord: Option<Shape>,
+    // next_coord: Option<Coord>,
+    coord_iter: CoordIterator<'a>
 }
 
 impl<'a, T> TensorIterator<'a, T> {
-    pub fn has_next(&self) -> bool {
-        self.started && self.next_coord.is_some()
-    }
-
-    fn step_forward(&mut self) {
-        if !self.started {
-            self.started = true;
-            self.next_coord = Some(self.tensor.shape.clone());
-        } else {
-            let current_coord = self.next_coord.as_ref().unwrap();
-            self.next_coord = Shape::next_coord(&self.tensor.shape, &current_coord);
+    pub fn new(tensor: &'a Tensor<T>) -> Self {
+        Self {
+            tensor,
+            coord_iter: CoordIterator::new(tensor.shape())
         }
     }
-    
 }
 
 impl<'a, T> Iterator for TensorIterator<'a, T> {
     type Item = TensorIter<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.step_forward();
-        if self.has_next() {
-            let next_iter: TensorIter<'a, T> = TensorIter {
-                coords: self.next_coord.as_ref().unwrap().clone(),
-                value: self.tensor.at_ref(self.next_coord.as_ref().unwrap()).unwrap()
-            };
-    
-            Some(next_iter)
-        } else {
-            None
+        match self.coord_iter.next() {
+            Some(item) => {
+                let value = self.tensor.at_ref(&item).unwrap();
+                Some(
+                    TensorIter {
+                        coords: item,
+                        value
+                    }
+                )
+            },
+            None => None
         }
     }
 }
@@ -221,7 +213,7 @@ mod test {
     use super::*;
     #[test]
     fn tensor_new() {
-        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|shape, _| { shape.mul() as f64 }));
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|coord, _| { coord.mul() as f64 }));
         assert_eq!(t.shape(), &shape!(2, 4, 3));
     }
 
@@ -230,7 +222,7 @@ mod test {
         let generator: &TensorValueGenerator<f64> = &|coord, _| { coord.mul() as f64 };
         let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         assert_eq!(t.shape(), &shape!(2, 4, 3));
-        let test_value = t.at(shape!(1, 2, 2));
+        let test_value = t.at(coord!(1, 2, 2));
         assert_eq!(test_value, Some(&4.0));
     }
 }

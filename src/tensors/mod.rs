@@ -18,7 +18,7 @@ mod coord;
 macro_rules! coord {
     ( $( $x:expr ),* ) => {
         {
-            let mut dims = Vec::<std::num::NonZeroUsize>::new();
+            let mut dims = Vec::<usize>::new();
             $(
                 dims.push($x);
             )*
@@ -32,3 +32,4 @@ mod tensors;
 
 pub use tensors::*;
 pub use shape::*;
+pub use coord::*;

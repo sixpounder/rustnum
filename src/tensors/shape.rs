@@ -1,6 +1,8 @@
 use std::ops::{Index, IndexMut};
 use std::slice::Iter;
 
+use crate::{Coord, CoordIterator};
+
 #[derive(Debug)]
 pub struct Shape {
     dimensions: Vec<usize>,
@@ -220,13 +222,14 @@ impl Shape {
         self.mul() == other.mul()
     }
 
-    pub fn iter(&self) -> ShapeIterator {
-        ShapeIterator {
-            shape: self,
-            started: true,
-            curr_coord: Shape::zeroes(self.len()),
-            next_coord: Some(Shape::zeroes(self.len()))
-        }
+    pub fn iter(&self) -> CoordIterator {
+        // ShapeIterator {
+        //     shape: self,
+        //     started: true,
+        //     curr_coord: Coord::zeroes(self.len()),
+        //     next_coord: Some(Coord::zeroes(self.len()))
+        // }
+        CoordIterator::new(self)
     }
 }
 
@@ -243,76 +246,76 @@ impl IndexMut<usize> for Shape {
     }
 }
 
-pub struct ShapeIterator<'a> {
-    shape: &'a Shape,
-    started: bool,
-    curr_coord: Shape,
-    next_coord: Option<Shape>
-}
+// pub struct ShapeIterator<'a> {
+//     shape: &'a Shape,
+//     started: bool,
+//     curr_coord: Coord,
+//     next_coord: Option<Coord>
+// }
 
-impl<'a> ShapeIterator<'a> {
-    fn has_next(&self) -> bool {
-        self.next_coord.is_some()
-    }
+// impl<'a> ShapeIterator<'a> {
+//     fn has_next(&self) -> bool {
+//         self.next_coord.is_some()
+//     }
 
-    fn step_forward(&mut self) {
-        if self.started {
-            self.started = false;
-        } else {
-            let mut end_of_shape = false;
-            let shape_last_index = self.shape.len() - 1;
-            let mut i = shape_last_index;
-            while let Some(coordinate) = self.curr_coord.get_axis_mut(i) {
-                if *coordinate < (self.shape[i] - 1) {
-                    // Can move on this axis
-                    *coordinate = *coordinate + 1;
+//     fn step_forward(&mut self) {
+//         if self.started {
+//             self.started = false;
+//         } else {
+//             let mut end_of_shape = false;
+//             let shape_last_index = self.shape.len() - 1;
+//             let mut i = shape_last_index;
+//             while let Some(coordinate) = self.curr_coord.get_axis_mut(i) {
+//                 if *coordinate < (self.shape[i] - 1) {
+//                     // Can move on this axis
+//                     *coordinate = *coordinate + 1;
     
-                    // If the axis is NOT the last one, we must reset all contained axis
-                    if i < shape_last_index {
-                        let reset_rng = (i + 1)..=shape_last_index;
-                        for j in reset_rng {
-                            self.curr_coord[j] = 0;
-                        }
-                    }
+//                     // If the axis is NOT the last one, we must reset all contained axis
+//                     if i < shape_last_index {
+//                         let reset_rng = (i + 1)..=shape_last_index;
+//                         for j in reset_rng {
+//                             self.curr_coord[j] = 0;
+//                         }
+//                     }
     
-                    break;
-                } else {
-                    if i == 0 {
-                        // Axis is done and there are no more axis, shape ended
-                        end_of_shape = true;
-                        break;
-                    } else {
-                        // Axis is done, check the next one
-                        i -= 1;
-                        continue;
-                    }
-                }
-            }
+//                     break;
+//                 } else {
+//                     if i == 0 {
+//                         // Axis is done and there are no more axis, shape ended
+//                         end_of_shape = true;
+//                         break;
+//                     } else {
+//                         // Axis is done, check the next one
+//                         i -= 1;
+//                         continue;
+//                     }
+//                 }
+//             }
     
-            if end_of_shape {
-                self.next_coord = None;
-            } else {
-                self.next_coord = Some(self.curr_coord.clone());
-            }
-        }
-    }
-}
+//             if end_of_shape {
+//                 self.next_coord = None;
+//             } else {
+//                 self.next_coord = Some(self.curr_coord.clone());
+//             }
+//         }
+//     }
+// }
 
-impl<'a> Iterator for ShapeIterator<'a> {
-    type Item = Shape;
+// impl<'a> Iterator for ShapeIterator<'a> {
+//     type Item = Coord;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.step_forward();
-        if !self.has_next() {
-            None
-        } else {
-            let next = self.next_coord.as_ref().unwrap();
-            Some(
-                next.clone()
-            )
-        }
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.step_forward();
+//         if !self.has_next() {
+//             None
+//         } else {
+//             let next = self.next_coord.as_ref().unwrap();
+//             Some(
+//                 next.clone()
+//             )
+//         }
+//     }
+// }
 
 /// Utility to compute axis cardinalities for later use
 fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
@@ -353,7 +356,7 @@ mod test {
     #[test]
     pub fn coordinates_iter() {
         let mut s = shape!(3, 4, 9);
-        let mut all_coords: Vec<Shape> = s.iter().collect();
+        let mut all_coords: Vec<Coord> = s.iter().collect();
         assert_eq!(all_coords.len(), 108);
     }
 }
