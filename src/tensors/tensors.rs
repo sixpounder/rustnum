@@ -1,19 +1,8 @@
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 use crate::{Coord, Shape};
-use crate::types::TData;
 
-type TensorValueGenerator<T> = dyn Fn(&Shape) -> T;
-
-pub struct TensorIter {
-    coords: Shape,
-    value: TData
-}
-
-pub enum TensorComponentType {
-    Value,
-    Axis
-}
+type TensorValueGenerator<T> = dyn Fn(&Shape, u64) -> T;
 
 pub trait TensorComponent {}
 
@@ -32,9 +21,10 @@ fn make_tensor<T: Default + Copy>(shape: Shape, generator: &TensorValueGenerator
     
     // `set_len` would be faster, but unsafe. Consider using it for better performance?
     values.resize(shape_card, T::default());
-
+    let mut counter = 0;
     for i in shape.iter() {
-        values[pos_for(&shape, &i)] = generator(&i);
+        values[pos_for(&shape, &i)] = generator(&i, counter);
+        counter += 1;
     }
 
     let out_tensor: Tensor<T> = Tensor {
@@ -75,6 +65,26 @@ impl<T> Tensor<T> {
         }
     }
 
+    pub fn at_ref(&self, coords: &Shape) -> Option<&T> {
+        let idx = self.index_for_coords(&coords);
+        match idx {
+            Some(index) => {
+                self.values.get(index)
+            },
+            None => None
+        }
+    }
+
+    pub fn at_mut(&mut self, coords: Shape) -> Option<&mut T> {
+        let idx = self.index_for_coords(&coords);
+        match idx {
+            Some(index) => {
+                self.values.get_mut(index)
+            },
+            None => None
+        }
+    }
+
     pub fn set(&mut self, coords: Coord, value: T) -> Result<(), ()> {
         let idx = self.index_for_coords(&coords);
         match idx {
@@ -85,13 +95,27 @@ impl<T> Tensor<T> {
             None => Err(())
         }
     }
+
+    pub fn iter(&self) -> TensorIterator<T> {
+        TensorIterator {
+            tensor: &self,
+            next_coord: None,
+            started: false
+        }
+    }
+
+    // pub fn sum(&self, other: Tensor<T>) -> Result<Tensor<T>> {
+    //     if self.shape.equiv(other.shape()) {
+
+    //     }
+    // }
 }
 
 impl<T: Default + Copy> Tensor<T> {
 
     /// Creates a new tensor
     pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
-        make_tensor(shape, generator.unwrap_or(&|_| T::default() ))
+        make_tensor(shape, generator.unwrap_or(&|_, _| T::default() ))
     }
 
     /// Gets the shape of this tensor
@@ -131,18 +155,79 @@ impl<T> Index<Coord> for Tensor<T> {
     }
 }
 
+impl<T> IndexMut<Coord> for Tensor<T> {
+    fn index_mut(&mut self, index: Coord) -> &mut Self::Output {
+        self.at_mut(index).unwrap()
+    }
+}
+
+// impl<T> Add for Tensor<T> {
+//     type Output = Tensor<T>;
+
+//     fn add(self, rhs: Self) -> Self::Output {
+//         self.sum(rhs)
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct TensorIter<'a, T> {
+    coords: Shape,
+    value: &'a T
+}
+
+pub struct TensorIterator<'a, T> {
+    started: bool,
+    tensor: &'a Tensor<T>,
+    next_coord: Option<Shape>,
+}
+
+impl<'a, T> TensorIterator<'a, T> {
+    pub fn has_next(&self) -> bool {
+        self.started && self.next_coord.is_some()
+    }
+
+    fn step_forward(&mut self) {
+        if !self.started {
+            self.started = true;
+            self.next_coord = Some(self.tensor.shape.clone());
+        } else {
+            let current_coord = self.next_coord.as_ref().unwrap();
+            self.next_coord = Shape::next_coord(&self.tensor.shape, &current_coord);
+        }
+    }
+    
+}
+
+impl<'a, T> Iterator for TensorIterator<'a, T> {
+    type Item = TensorIter<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.step_forward();
+        if self.has_next() {
+            let next_iter: TensorIter<'a, T> = TensorIter {
+                coords: self.next_coord.as_ref().unwrap().clone(),
+                value: self.tensor.at_ref(self.next_coord.as_ref().unwrap()).unwrap()
+            };
+    
+            Some(next_iter)
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     #[test]
     fn tensor_new() {
-        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|shape| { shape.mul() as f64 }));
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(&|shape, _| { shape.mul() as f64 }));
         assert_eq!(t.shape(), &shape!(2, 4, 3));
     }
 
     #[test]
     fn tensor_at() {
-        let generator: &TensorValueGenerator<f64> = &|coord| { coord.mul() as f64 };
+        let generator: &TensorValueGenerator<f64> = &|coord, _| { coord.mul() as f64 };
         let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         assert_eq!(t.shape(), &shape!(2, 4, 3));
         let test_value = t.at(shape!(1, 2, 2));

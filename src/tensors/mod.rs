@@ -13,11 +13,12 @@ macro_rules! shape {
     };
 }
 
+mod coord;
 #[macro_export]
 macro_rules! coord {
     ( $( $x:expr ),* ) => {
         {
-            let mut dims = Vec::<usize>::new();
+            let mut dims = Vec::<std::num::NonZeroUsize>::new();
             $(
                 dims.push($x);
             )*

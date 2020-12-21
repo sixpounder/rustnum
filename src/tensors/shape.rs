@@ -66,10 +66,53 @@ impl Eq for Shape {}
 
 impl Shape {
     pub fn new(dimensions: Vec<usize>) -> Self {
+        if dimensions.iter().any(|f| *f == 0) {
+            panic!("Zero value dimensions are not allowed in shapes");
+        }
+
         let scale_factors = compute_scale_factors(&dimensions);
         Self {
             dimensions,
             scale_factors,
+        }
+    }
+
+    pub fn next_coord(shape: &Shape, from: &Shape) -> Option<Shape> {
+        let mut end_of_shape = false;
+        let mut coord = from.clone();
+        let shape_last_index = shape.len() - 1;
+        let mut i = shape_last_index;
+        while let Some(coordinate) = coord.get_axis_mut(i) {
+            if *coordinate < (shape[i] - 1) {
+                // Can move on this axis
+                *coordinate = *coordinate + 1;
+    
+                // If the axis is NOT the last one, we must reset all contained axis
+                if i < shape_last_index {
+                    let reset_rng = (i + 1)..=shape_last_index;
+                    for j in reset_rng {
+                        coord[j] = 0;
+                    }
+                }
+    
+                break;
+            } else {
+                if i == 0 {
+                    // Axis is done and there are no more axis, shape ended
+                    end_of_shape = true;
+                    break;
+                } else {
+                    // Axis is done, check the next one
+                    i -= 1;
+                    continue;
+                }
+            }
+        }
+    
+        if end_of_shape {
+            None
+        } else {
+            Some(from.clone())
         }
     }
 
@@ -200,14 +243,11 @@ impl IndexMut<usize> for Shape {
     }
 }
 
-pub type Coord = Shape;
-pub type ShapeIter = Coord;
-
 pub struct ShapeIterator<'a> {
     shape: &'a Shape,
     started: bool,
-    curr_coord: Coord,
-    next_coord: Option<Coord>
+    curr_coord: Shape,
+    next_coord: Option<Shape>
 }
 
 impl<'a> ShapeIterator<'a> {
@@ -259,7 +299,7 @@ impl<'a> ShapeIterator<'a> {
 }
 
 impl<'a> Iterator for ShapeIterator<'a> {
-    type Item = Coord;
+    type Item = Shape;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.step_forward();
