@@ -37,7 +37,7 @@ impl Coord {
         self.axis.iter()
     }
 
-    pub fn mul(&self) -> usize {
+    pub fn cardinality(&self) -> usize {
         let mut p = 1;
         self.axis.iter().for_each(|i| {
             p = p * i;
@@ -69,6 +69,15 @@ pub struct CoordIterator<'a> {
 
 impl<'a> CoordIterator<'a> {
     pub fn new(space: &'a Shape) -> Self {
+        Self {
+            space,
+            current: Coord::zeroes(space.len()),
+            next: None,
+            started: false
+        }
+    }
+
+    pub fn from_mut(space: &'a mut Shape) -> Self {
         Self {
             space,
             current: Coord::zeroes(space.len()),
@@ -124,6 +133,18 @@ impl<'a> CoordIterator<'a> {
         }
     }
 }
+
+// impl<'a> AsMut<CoordIterator<'a>> for CoordIterator<'a> {
+//     fn as_mut(&mut self) -> &mut CoordIterator<'a> {
+//         self as &mut Self
+//     }
+// }
+
+// impl<'a> AsRef<CoordIterator<'a>> for CoordIterator<'a> {
+//     fn as_ref(&self) -> &CoordIterator<'a> {
+//         self
+//     }
+// }
 
 impl<'a> Iterator for CoordIterator<'a> {
     type Item = Coord;
