@@ -92,7 +92,7 @@ impl Shape {
     /// Creates a shape with `n_dimensions` set to 0
     pub fn zeroes(n_dimensions: usize) -> Self {
         let mut dimensions = Vec::with_capacity(n_dimensions);
-        for i in 0..n_dimensions {
+        for _ in 0..n_dimensions {
             dimensions.push(0);
         }
 
@@ -254,8 +254,8 @@ mod test {
 
     #[test]
     pub fn coordinates_iter() {
-        let mut s = shape!(3, 4, 9);
-        let mut all_coords: Vec<Coord> = s.iter().collect();
+        let s = shape!(3, 4, 9);
+        let all_coords: Vec<Coord> = s.iter().collect();
         assert_eq!(all_coords.len(), 108);
     }
 }

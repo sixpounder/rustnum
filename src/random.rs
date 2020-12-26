@@ -1,9 +1,13 @@
-use crate::{Coord, Shape, Tensor, density};
+use crate::{density, Coord, Shape, Tensor};
 use std::vec::Vec;
-use std::{ops::Range, option::Option};
+use std::ops::Range;
 
-pub fn normal(range: Range<f64>, step: f64, mean: f64, scale: f64, shape: Option<Shape>) -> Tensor<f64> {
-    let d_size = shape.unwrap_or(shape![10]);
+pub fn normal(
+    range: Range<f64>,
+    step: f64,
+    mean: f64,
+    scale: f64,
+) -> Tensor<f64> {
     let mut range_vec: Vec<f64> = vec![];
     let mut r = range.start;
 
@@ -12,25 +16,31 @@ pub fn normal(range: Range<f64>, step: f64, mean: f64, scale: f64, shape: Option
         r += step;
     }
 
-    let distribution: Tensor<f64> = Tensor::<f64>::new(&d_size, Some(& move |_: &Coord, i: u64| -> f64 {
-        // println!("{}", range_vec[i as usize]);
-        let d = density(range_vec[i as usize], mean, scale);
-        println!("{}", d);
-        d
-    }));
+    let d_size = shape!(range_vec.len());
+
+    let distribution: Tensor<f64> = Tensor::<f64>::new(
+        &d_size,
+        Some(&move |_: &Coord, i: u64| -> f64 {
+            density(range_vec[i as usize], mean, scale)
+        }),
+    );
 
     distribution
 }
 
 pub fn normal_f64(range: Range<f64>) -> Tensor<f64> {
-    normal(range, 0.1, 1.0, 0.5, None)
+    normal(range, 0.1, 1.0, 0.5)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     #[test]
-    pub fn test_normal() {
-        println!("{:?}", normal(0.0..10.0, 0.1, 0.1, 2.0, Some(shape!(100))));
+    pub fn normal_distribution() {
+        let dist: Tensor<f64> = normal(-5.0..4.9, 0.1, 0.0, 0.2);
+        // for item in dist.iter() {
+        //     println!("{} -> {}", item.coords, item.value);
+        // }
+        assert_eq!(dist.len(), 100);
     }
 }

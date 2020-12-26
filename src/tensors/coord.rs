@@ -1,4 +1,4 @@
-use std::{ops::{Index, IndexMut}, slice::Iter};
+use std::{fmt::Display, ops::{Index, IndexMut}, slice::Iter};
 
 use crate::Shape;
 
@@ -59,6 +59,13 @@ impl IndexMut<usize> for Coord {
     }
 }
 
+impl Display for Coord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_list: Vec<String> = self.iter_axis().map(|axis| { axis.to_string() }).collect();
+        write!(f, "({})", string_list.join(","))
+    }
+}
+
 /// An iterator over a coordinate system in a space described by a `shape`
 pub struct CoordIterator<'a> {
     space: &'a Shape,
@@ -68,6 +75,13 @@ pub struct CoordIterator<'a> {
 }
 
 impl<'a> CoordIterator<'a> {
+    /// Creates a new coordinate iterator for a given `Shape`, starting at the shape origin
+    /// # Example
+    /// ```
+    /// let shape = shape!(3, 5, 3);
+    /// let iter = CoordIterator::new(&shape);
+    /// assert_eq!(iter.take(1), Some(coord!(0, 0, 0)));
+    /// ```
     pub fn new(space: &'a Shape) -> Self {
         Self {
             space,
@@ -133,18 +147,6 @@ impl<'a> CoordIterator<'a> {
         }
     }
 }
-
-// impl<'a> AsMut<CoordIterator<'a>> for CoordIterator<'a> {
-//     fn as_mut(&mut self) -> &mut CoordIterator<'a> {
-//         self as &mut Self
-//     }
-// }
-
-// impl<'a> AsRef<CoordIterator<'a>> for CoordIterator<'a> {
-//     fn as_ref(&self) -> &CoordIterator<'a> {
-//         self
-//     }
-// }
 
 impl<'a> Iterator for CoordIterator<'a> {
     type Item = Coord;
