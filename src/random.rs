@@ -2,6 +2,7 @@ use crate::{density, Coord, Shape, Tensor};
 use std::vec::Vec;
 use std::ops::Range;
 
+/// A normal distribution with `mean` and `scale` parameters in a given `range` of values
 pub fn normal(
     range: Range<f64>,
     step: f64,
@@ -38,9 +39,16 @@ mod test {
     #[test]
     pub fn normal_distribution() {
         let dist: Tensor<f64> = normal(-5.0..4.9, 0.1, 0.0, 0.2);
-        // for item in dist.iter() {
-        //     println!("{} -> {}", item.coords, item.value);
-        // }
         assert_eq!(dist.len(), 100);
+    }
+
+    #[test]
+    pub fn normal_with_shape() {
+        let mut dist: Tensor<f64> = normal(-5.0..4.9, 0.1, 0.0, 0.2);
+        assert_eq!(dist.len(), 100);
+
+        dist.reshape(&shape!(2, 50));
+        assert_eq!(dist.len(), 100);
+        assert_ne!(dist.at(coord!(0, 2)), None);
     }
 }
