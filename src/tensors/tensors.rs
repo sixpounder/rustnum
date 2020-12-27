@@ -274,6 +274,32 @@ pub struct TensorComponent<'a, T> {
     pub tensor: &'a Tensor<T>,
 }
 
+impl<T: std::cmp::PartialEq> PartialEq for TensorComponent<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        *self.value == *other.value
+    }
+}
+
+impl<T: PartialEq> Eq for TensorComponent<'_, T> {}
+
+impl<T: Ord> PartialOrd for TensorComponent<'_, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some((*self.value).cmp(other.value))
+    }
+}
+
+impl<T: PartialEq + Ord> Ord for TensorComponent<'_, T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if *self.value < *other.value {
+            std::cmp::Ordering::Less
+        } else if *self.value > *other.value {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    }
+}
+
 /// Implements an iteration over a tensor
 pub struct TensorIterator<'a, T> {
     tensor: &'a Tensor<T>,
@@ -404,5 +430,19 @@ mod test {
         let mut t = Tensor::<f64>::new(&shape!(2, 4, 3), Some(generator));
         t = t * 2.0;
         assert_eq!(t.at(coord!(1, 2, 2)), Some(&8.0));
+    }
+
+    #[test]
+    fn ordering() {
+        let generator: &TensorValueGenerator<u64> = &|_, i| i;
+        let t = Tensor::<u64>::new(&shape!(2, 4, 3), Some(generator));
+        
+        let min_component = t.iter().min().unwrap();
+        assert_eq!(min_component.value, &0);
+        assert_eq!(min_component.coords, coord!(0, 0, 0));
+
+        let max_component = t.iter().max().unwrap();
+        assert_eq!(max_component.value, &23);
+        assert_eq!(max_component.coords, coord!(1, 3, 2));
     }
 }

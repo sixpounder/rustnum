@@ -3,13 +3,13 @@
 //! 
 //! # Quick start
 //! ```
-//! let normal_distribution = rustnum::random::normal(3, 4, Some(shape!(3,2,5)));
+//! let normal_distribution = rustnum::distributions::normal(-5.0..4.9, 0.1, 0.0, 0.2);
 //! ```
 #[macro_use]
 mod tensors;
 mod generators;
-pub mod random;
+pub mod distributions;
+pub mod range;
 
 pub use tensors::*;
-pub use random::*;
 pub use generators::*;

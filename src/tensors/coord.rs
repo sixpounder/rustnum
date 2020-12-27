@@ -59,6 +59,20 @@ impl IndexMut<usize> for Coord {
     }
 }
 
+impl PartialEq for Coord {
+    fn eq(&self, other: &Self) -> bool {
+        let mut i = 0;
+        while i < self.axis.len() {
+            if other.axis[i] != self.axis[i] {
+                return false;
+            }
+            i += 1;
+        }
+
+        true
+    }
+}
+
 impl Display for Coord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string_list: Vec<String> = self.iter_axis().map(|axis| { axis.to_string() }).collect();
