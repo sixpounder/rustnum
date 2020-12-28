@@ -2,18 +2,21 @@ use std::{fmt::Display, ops::{Index, IndexMut}, slice::Iter};
 
 use crate::Shape;
 
+/// Represents a generic coordinate
 #[derive(Clone, Debug)]
 pub struct Coord {
     axis: Vec<usize>,
 }
 
 impl Coord {
-    pub fn new(dimensions: Vec<usize>) -> Self {
+    /// Creates a new coordinate with `axis` as its components
+    pub fn new(axis: Vec<usize>) -> Self {
         Self {
-            axis: dimensions,
+            axis: axis,
         }
     }
 
+    /// Creates a new coordinate of `n_dimensions` component set to `0`
     pub fn zeroes(n_dimensions: usize) -> Self {
         let mut dimensions = Vec::with_capacity(n_dimensions);
         for _ in 0..n_dimensions {
@@ -25,24 +28,29 @@ impl Coord {
         }
     }
 
+    /// Gets the value of the axis component at `idx` position.
+    /// The same can be done with regular indexing (like `my_coord[0]`)
     pub fn get_axis(&self, idx: usize) -> Option<&usize> {
         self.axis.get(idx)
     }
 
+    /// `get_axis` mutable output variant
     pub fn get_axis_mut(&mut self, idx: usize) -> Option<&mut usize> {
         self.axis.get_mut(idx)
     }
 
+    /// An iterator over the coordinate components
     pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.axis.iter()
     }
 
+    /// The cardinality of the coordinate (the multiplication of all its components)
     pub fn cardinality(&self) -> usize {
-        let mut p = 1;
+        let mut cardinality = 1;
         self.axis.iter().for_each(|i| {
-            p = p * i;
+            cardinality = cardinality * i;
         });
-        p
+        cardinality
     }
 }
 

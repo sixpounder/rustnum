@@ -5,8 +5,10 @@ use crate::{Coord, CoordIterator, Shape};
 type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
 /// Enumeration for common errors on tensors
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TensorError {
+    Init,
+    Set,
     /// Usually thrown when an operation on a tensor
     /// involving a set of coordinates not contained by the tensor was attempted
     NoCoordinate,
@@ -23,12 +25,14 @@ fn pos_for(shape: &Shape, coords: &Coord) -> usize {
     idx
 }
 
-fn make_tensor<T: Default + Copy>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
+fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
     let shape_card = shape.mul();
     let mut values: Vec<T> = Vec::with_capacity(shape_card);
 
     // `set_len` would be faster, but unsafe. Consider using it for better performance?
-    values.resize(shape_card, T::default());
+    unsafe {
+        values.set_len(shape_card);
+    }
     let mut counter = 0;
     for i in shape.iter() {
         let position = pos_for(&shape, &i);
@@ -73,6 +77,11 @@ pub struct Tensor<T> {
 }
 
 impl<T> Tensor<T> {
+    /// Same as `new`, but Creates an empty tensor with uninitialized memory
+    pub fn new_uninit(shape: Shape) -> Tensor<T> {
+        make_tensor(&shape, &|_, _| { unsafe { std::mem::MaybeUninit::uninit().assume_init() } })
+    }
+
     /// Gets the shape of this tensor
     pub fn shape(&self) -> &Shape {
         &self.shape
@@ -156,8 +165,8 @@ impl<T> Tensor<T> {
 impl<T: Copy> Tensor<T> {
     /// Reshapes this tensor into a different shape. The new shape must be coherent
     /// with the number of values contained by the current one.
-    pub fn reshape(&mut self, t_shape: &Shape) {
-        if self.shape.equiv(t_shape) {
+    pub fn reshape(&mut self, t_shape: Shape) {
+        if self.shape.equiv(&t_shape) {
             self.shape = t_shape.clone();
         }
     }
@@ -182,19 +191,19 @@ impl<T: Copy> Tensor<T> {
     }
 }
 
-impl<T: Default + Copy> Tensor<T> {
-    /// Creates a new tensor
+impl<T: Default> Tensor<T> {
+    /// Creates a new tensor with a value generator
     /// # Example
     /// ```
-    /// let tensor: Tensor<f64> = Tensor::new(&shape!(3,4,10), &|coord, counter| {
+    /// let tensor: Tensor<f64> = Tensor::new(shape!(3,4,10), &|coord, counter| {
     ///    // For example, make every number the result of the multiplication of the coordinates
     ///    // plus the counter
     ///    coord.mul().into() + counter.into()
     /// });
     /// ```
     ///
-    pub fn new(shape: &Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
-        make_tensor(shape, generator.unwrap_or(&|_, _| T::default()))
+    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
+        make_tensor(&shape, generator.unwrap_or(&|_, _| T::default()))
     }
 }
 
@@ -202,6 +211,7 @@ impl<T> Tensor<T>
 where
     T: Copy + std::ops::Mul<Output = T>,
 {
+
     /// Scales up every item in this tensor by `scalar`
     pub fn scale(&mut self, scalar: T) {
         for item in self.values.iter_mut() {
@@ -333,13 +343,14 @@ impl<'a, T> Iterator for TensorIterator<'a, T> {
     }
 }
 
+/// A single mutable component of a tensor
 #[derive(Debug)]
 pub struct TensorComponentMut<'a, T> {
     pub coords: Coord,
     pub value: &'a mut T,
 }
 
-/// Implements an iteration over a tensor
+/// Implements a mutable iterator over a tensor
 pub struct TensorIteratorMut<'a, T> {
     tensor: *mut Tensor<T>,
     coord_iter: CoordIterator<'a>,
@@ -393,7 +404,7 @@ mod test {
     #[test]
     fn new() {
         let t = Tensor::<f64>::new(
-            &shape!(2, 4, 3),
+            shape!(2, 4, 3),
             Some(&|coord, _| coord.cardinality() as f64),
         );
         assert_eq!(t.shape(), &shape!(2, 4, 3));
@@ -402,7 +413,7 @@ mod test {
     #[test]
     fn at() {
         let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let t = Tensor::<f64>::new(&shape!(2, 4, 3), Some(generator));
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         assert_eq!(t.shape(), &shape!(2, 4, 3));
         let test_value = t.at(coord!(1, 2, 2));
         assert_eq!(test_value, Some(&4.0));
@@ -411,7 +422,7 @@ mod test {
     #[test]
     fn iter_mut() {
         let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let mut t = Tensor::<f64>::new(&shape!(2, 4, 3), Some(generator));
+        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         let c = t.iter_mut().count();
         assert_eq!(c, 24);
     }
@@ -419,7 +430,7 @@ mod test {
     #[test]
     fn scalar_sum() {
         let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let mut t = Tensor::<f64>::new(&shape!(2, 4, 3), Some(generator));
+        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         t = t + 2.0;
         assert_eq!(t.at(coord!(1, 2, 2)), Some(&6.0));
     }
@@ -427,7 +438,7 @@ mod test {
     #[test]
     fn scalar_mul() {
         let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let mut t = Tensor::<f64>::new(&shape!(2, 4, 3), Some(generator));
+        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
         t = t * 2.0;
         assert_eq!(t.at(coord!(1, 2, 2)), Some(&8.0));
     }
@@ -435,8 +446,8 @@ mod test {
     #[test]
     fn ordering() {
         let generator: &TensorValueGenerator<u64> = &|_, i| i;
-        let t = Tensor::<u64>::new(&shape!(2, 4, 3), Some(generator));
-        
+        let t = Tensor::<u64>::new(shape!(2, 4, 3), Some(generator));
+
         let min_component = t.iter().min().unwrap();
         assert_eq!(min_component.value, &0);
         assert_eq!(min_component.coords, coord!(0, 0, 0));
@@ -444,5 +455,18 @@ mod test {
         let max_component = t.iter().max().unwrap();
         assert_eq!(max_component.value, &23);
         assert_eq!(max_component.coords, coord!(1, 3, 2));
+    }
+
+    #[test]
+    fn uninit() {
+        let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
+        assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
+        assert_eq!(t[coord!(0, 0, 0)], 8);
+    }
+
+    #[test]
+    fn uninit_at_no_panic() {
+        let t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
+        assert!(t.at(coord!(0, 1, 3)).is_some());
     }
 }

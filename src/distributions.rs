@@ -20,7 +20,7 @@ pub fn normal(
     let d_size = shape!(range_vec.len());
 
     let distribution: Tensor<f64> = Tensor::<f64>::new(
-        &d_size,
+        d_size,
         Some(&move |_: &Coord, i: u64| -> f64 {
             density(range_vec[i as usize], mean, scale)
         }),
@@ -47,7 +47,7 @@ mod test {
         let mut dist: Tensor<f64> = normal(-5.0..4.9, 0.1, 0.0, 0.2);
         assert_eq!(dist.len(), 100);
 
-        dist.reshape(&shape!(2, 50));
+        dist.reshape(shape!(2, 50));
         assert_eq!(dist.len(), 100);
         assert_ne!(dist.at(coord!(0, 2)), None);
     }
