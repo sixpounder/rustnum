@@ -1,6 +1,5 @@
 use std::ops::{Index, IndexMut};
 use std::slice::Iter;
-
 use crate::{CoordIterator};
 
 /// A shape is a description of a space with `n` independent dimensions

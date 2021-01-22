@@ -1,6 +1,6 @@
 use std::ops::{Add, Index, IndexMut, Mul};
 
-use crate::{Coord, CoordIterator, Shape};
+use crate::{Coord, CoordIterator, Shape, ops::Dot};
 
 type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
@@ -9,6 +9,7 @@ type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 pub enum TensorError {
     Init,
     Set,
+    NotSupported,
     /// Usually thrown when an operation on a tensor
     /// involving a set of coordinates not contained by the tensor was attempted
     NoCoordinate,
@@ -275,6 +276,36 @@ impl<T: Copy + std::ops::Add<Output = T>> Add<T> for Tensor<T> {
         out_tensor
     }
 }
+
+// impl<T> Dot<Tensor<T>> for Tensor<T> where T: std::ops::Mul {
+//     type Output = Result<Tensor<T>, TensorError>;
+
+//     fn dot(&self, b: Tensor<T>) -> Self::Output {
+//         let a_shape = self.shape();
+//         let b_shape = b.shape();
+//         if a_shape.len() > 2 || b.shape().len() > 2 {
+//             Err(TensorError::NotSupported)
+//         } else {
+//             let target_shape: Shape;
+//             if a_shape[1] == b_shape[0] {
+//                 target_shape = shape!(a_shape[0], b_shape[1]);
+//             } else {
+//                 return Err(TensorError::NotSupported);
+//             }
+
+//             let out_tensor = Tensor::<T>::new_uninit(target_shape);
+
+//             for row in self.iter() {
+//                 let r_sum = 0.0;
+//                 for col in b.iter() {
+//                     r_sum = r_sum + (*row.value * *col.value);
+//                 }
+//             }
+
+//             Ok(out_tensor)
+//         }
+//     }
+// }
 
 /// A single component of a tensor
 #[derive(Debug)]

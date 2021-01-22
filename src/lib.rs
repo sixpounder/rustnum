@@ -5,11 +5,19 @@
 //! ```
 //! let normal_distribution = rustnum::distributions::normal(-5.0..4.9, 0.1, 0.0, 0.2);
 //! ```
+//! Generate an evenly spaced number range:
+//! ```rust
+//! let range = rustnum::ranges::arange(-5.0..4.9, 0.1);
+//! ```
 #[macro_use]
 mod tensors;
 mod generators;
+mod numbers;
+pub mod ranges;
 pub mod distributions;
-pub mod range;
+pub mod linalg;
+pub mod ops;
 
+pub use numbers::*;
 pub use tensors::*;
 pub use generators::*;
