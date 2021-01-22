@@ -34,6 +34,7 @@ impl Display for PolarCoordinate {
     }
 }
 
+/// Represents a complex number in cartesian coordinates
 #[derive(Debug, PartialEq, Clone)]
 pub struct Complex {
     real: ComplexBaseType,
@@ -277,6 +278,8 @@ mod test {
     #[test]
     fn polar_coords() {
         let c = Complex::new(3.0, 4.0);
-        assert_eq!(c.polar_coords(), PolarCoordinate { radius: 5.0, angle: 0.6435011087932844 });
+        let p = c.polar_coords();
+        assert_eq!(p, PolarCoordinate { radius: 5.0, angle: 0.6435011087932844 });
+        assert_eq!(Complex::from_polar(p.radius, p.angle), Complex::new(3.0, 4.0));
     }
 }
