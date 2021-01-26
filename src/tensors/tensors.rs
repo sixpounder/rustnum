@@ -164,7 +164,17 @@ impl<T> Tensor<T> {
         self.values.len()
     }
 
-    /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor, returns an error
+    /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor it returns an error
+    /// ```
+    /// # use rustnum::{Tensor, shape, coord, Shape, Coord};
+    /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
+    /// assert_eq!(t[coord!(0, 0, 0)], 0);
+    /// assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
+    /// assert_eq!(t[coord!(0, 0, 0)], 8);
+    ///
+    /// // Trying to set a value on a non existing coordinate will yield an error
+    /// assert_eq!(t.set(&coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
+    /// ```
     pub fn set(&mut self, coords: &Coord, value: T) -> Result<(), TensorError> {
         let idx = self.index_for_coords(&coords);
         match idx {
@@ -518,6 +528,7 @@ mod test {
         assert_eq!(t[coord!(0, 0, 0)], 0);
         assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
         assert_eq!(t[coord!(0, 0, 0)], 8);
+        assert_eq!(t.set(&coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
     }
 
     #[test]
