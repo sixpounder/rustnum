@@ -12,12 +12,12 @@
 #[macro_use]
 mod tensors;
 mod generators;
-mod numbers;
+mod core;
 pub mod ranges;
 pub mod distributions;
 pub mod linalg;
 pub mod ops;
 
-pub use numbers::*;
+pub use crate::core::*;
 pub use tensors::*;
 pub use generators::*;

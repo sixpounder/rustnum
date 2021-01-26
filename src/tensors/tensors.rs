@@ -1,6 +1,6 @@
-use std::ops::{Add, Index, IndexMut, Mul};
+use std::{mem::zeroed, ops::{Add, Index, IndexMut, Mul}};
 
-use crate::{Coord, CoordIterator, Shape, ops::Dot};
+use crate::{ops::Dot, Coord, CoordIterator, Shape};
 
 type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
@@ -30,7 +30,7 @@ fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<
     let shape_card = shape.mul();
     let mut values: Vec<T> = Vec::with_capacity(shape_card);
 
-    // `set_len` would be faster, but unsafe. Consider using it for better performance?
+    // `set_len` unsafe, but fast
     unsafe {
         values.set_len(shape_card);
     }
@@ -49,27 +49,33 @@ fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<
     out_tensor
 }
 
-/// A tensor is simply a multidimensional array containing items of some kind.
-/// # Basics
-/// ## Create a tensor
+/// A tensor is simply a multidimensional array containing items of some kind. It is the struct
+/// returned by many of the distribution generators in this crate.
+///
+/// ## Create a tensor, read and write values
 /// ```
-/// let tensor: Tensor<f64> = Tensor::new(&shape!(3,4,10), &|coord, counter| {
-///    // For example, make every number the result of the multiplication of the coordinates
-///    // plus the counter
-///    coord.mul().into() + counter.into()
-/// });
-/// ```
-/// ## Get values
-/// ```
-/// tensor.at(coord!(0, 0, 1))
+/// # use rustnum::{Tensor, shape, Shape, Coord, coord};
+/// let generator = &|coord: &Coord, counter: u64| {
+///     // For example, make every number equal to
+///     // the cardinality of the coordinate plus the counter
+///     coord.cardinality() as f64 + counter as f64
+/// };
+///
+/// let mut tensor: Tensor<f64> = Tensor::new(
+///     shape!(3, 4, 10),
+///     Some(generator)
+/// );
+///
+///
+/// // Get values
+/// tensor.at(coord!(0, 0, 1));
 /// // or
-/// tensor[coord!(0, 0, 2)]
-/// ```
-/// ## Set values
-/// ```
-/// *tensor[coord!(0, 1, 2)] = 0.5
+/// tensor[coord!(0, 0, 2)];
+///
+/// // Set values
+/// tensor[coord!(0, 1, 2)] = 0.5;
 /// // or
-/// tensor.set(&coord!(0, 1, 2), 0.5)
+/// tensor.set(&coord!(0, 1, 2), 0.5);
 /// ```
 #[derive(Debug)]
 pub struct Tensor<T> {
@@ -78,9 +84,22 @@ pub struct Tensor<T> {
 }
 
 impl<T> Tensor<T> {
-    /// Same as `new`, but Creates an empty tensor with uninitialized memory
+    /// Same as `new`, but Creates an empty tensor with uninitialized memory.
+    /// This is significantly faster than `new`
+    /// but it leaves the tensor elements into uninitialized memory state.
+    /// **It is up to the user to guarantee initialization of each element of the tensor**,
+    /// or each access will resolve into undefined behavior.
+    ///
+    /// ```
+    /// # use rustnum::{Tensor, shape, coord, Shape, Coord};
+    /// let empty: Tensor<f64> = Tensor::new_uninit(shape!(4, 7));
+    /// assert!(empty.at(coord!(0, 0)).is_some());
+    /// ```
     pub fn new_uninit(shape: Shape) -> Tensor<T> {
-        make_tensor(&shape, &|_, _| { unsafe { std::mem::MaybeUninit::uninit().assume_init() } })
+        make_tensor(&shape, &|_, _| unsafe {
+            // std::mem::MaybeUninit::uninit().assume_init()
+            std::mem::MaybeUninit::zeroed().assume_init()
+        })
     }
 
     /// Gets the shape of this tensor
@@ -196,11 +215,17 @@ impl<T: Default> Tensor<T> {
     /// Creates a new tensor with a value generator
     /// # Example
     /// ```
-    /// let tensor: Tensor<f64> = Tensor::new(shape!(3,4,10), &|coord, counter| {
-    ///    // For example, make every number the result of the multiplication of the coordinates
-    ///    // plus the counter
-    ///    coord.mul().into() + counter.into()
-    /// });
+    /// # use rustnum::{Tensor, shape, Shape, Coord};
+    /// let generator = &|coord: &Coord, counter: u64| {
+    ///     // For example, make every number equal to
+    ///     // the cardinality of the coordinate plus the counter
+    ///     coord.cardinality() as f64 + counter as f64
+    /// };
+    ///
+    /// let tensor: Tensor<f64> = Tensor::new(
+    ///     shape!(3, 4, 10),
+    ///     Some(generator)
+    /// );
     /// ```
     ///
     pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
@@ -212,7 +237,6 @@ impl<T> Tensor<T>
 where
     T: Copy + std::ops::Mul<Output = T>,
 {
-
     /// Scales up every item in this tensor by `scalar`
     pub fn scale(&mut self, scalar: T) {
         for item in self.values.iter_mut() {
@@ -491,6 +515,7 @@ mod test {
     #[test]
     fn uninit() {
         let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
+        assert_eq!(t[coord!(0, 0, 0)], 0);
         assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
         assert_eq!(t[coord!(0, 0, 0)], 8);
     }

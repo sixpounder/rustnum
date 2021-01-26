@@ -89,6 +89,7 @@ impl Display for Coord {
 }
 
 /// An iterator over a coordinate system in a space described by a `shape`
+#[derive(Debug)]
 pub struct CoordIterator<'a> {
     space: &'a Shape,
     current: Coord,
@@ -100,9 +101,10 @@ impl<'a> CoordIterator<'a> {
     /// Creates a new coordinate iterator for a given `Shape`, starting at the shape origin
     /// # Example
     /// ```
-    /// let shape = shape!(3, 5, 3);
-    /// let iter = CoordIterator::new(&shape);
-    /// assert_eq!(iter.take(1), Some(coord!(0, 0, 0)));
+    /// # use rustnum::{shape, Shape, Coord};
+    /// let s = shape!(3, 5, 3);
+    /// let mut iter_one = s.iter().take(1);
+    /// assert_eq!(iter_one.next(), Some(Coord::new(vec![0, 0, 0])));
     /// ```
     pub fn new(space: &'a Shape) -> Self {
         Self {
@@ -180,5 +182,18 @@ impl<'a> Iterator for CoordIterator<'a> {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn base() {
+        use crate::{shape};
+        use super::*;
+
+        let s = shape!(3, 5, 3);
+        let mut iter_one = s.iter().take(1);
+        assert_eq!(iter_one.next(), Some(Coord::new(vec![0, 0, 0])));
     }
 }
