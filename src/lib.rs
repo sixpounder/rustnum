@@ -18,6 +18,6 @@ pub mod distributions;
 pub mod linalg;
 pub mod ops;
 
-pub use crate::core::*;
+pub use self::core::*;
 pub use tensors::*;
 pub use generators::*;

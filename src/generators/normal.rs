@@ -1,6 +1,10 @@
-pub fn density(x: f64, mean: f64, scale: f64) -> f64 {
-    let p1: f64 = 1.0 / (2.0 * std::f64::consts::PI * (scale.powf(2.0))).sqrt();
-    let p2: f64 = (((x - mean).powf(2.0)) / (2.0 * scale.powf(2.0))) * -1.0;
+use num_traits::{Float, FloatConst};
+
+pub fn density<'a, T: 'a + Float + FloatConst>(x: T, mean: T, scale: T) -> T {
+    let one = T::one();
+    let two = one + one;
+    let p1: T = T::one() / (two * FloatConst::PI() * scale.powf(two)).sqrt();
+    let p2: T = (((x - mean).powf(two)) / (two * scale.powf(two))) * one.neg();
     let p2_exp = p2.exp();
 
     p1 * p2_exp

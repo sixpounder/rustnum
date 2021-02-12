@@ -1,20 +1,28 @@
-use std::{mem::zeroed, ops::{Add, Index, IndexMut, Mul}};
+use std::ops::{Add, Index, IndexMut, Mul};
 
-use crate::{ops::Dot, Coord, CoordIterator, Shape};
+use num_traits::Float;
+
+use crate::{Coord, CoordIterator, Shape};
+
+use super::stats::Stats;
 
 type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
 /// Enumeration for common errors on tensors
 #[derive(Debug, PartialEq)]
 pub enum TensorError {
+    /// Tensor initialization error
     Init,
+    /// An error occurred while setting a value on a tensor
     Set,
+    /// This operation is not supported on tensors
     NotSupported,
     /// Usually thrown when an operation on a tensor
     /// involving a set of coordinates not contained by the tensor was attempted
     NoCoordinate,
 }
 
+#[inline]
 fn pos_for(shape: &Shape, coords: &Coord) -> usize {
     let mut idx = 0;
     let mut axis_index: usize = 0;
@@ -26,6 +34,7 @@ fn pos_for(shape: &Shape, coords: &Coord) -> usize {
     idx
 }
 
+#[inline]
 fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
     let shape_card = shape.mul();
     let mut values: Vec<T> = Vec::with_capacity(shape_card);
@@ -114,6 +123,7 @@ impl<T> Tensor<T> {
 
     /// Internal utility function for estabilishin a flattened index to assign
     /// coords to
+    #[inline]
     fn index_for_coords(&self, coords: &Coord) -> Option<usize> {
         let idx = pos_for(&self.shape, coords);
         if self.values.len() > idx {
@@ -166,7 +176,7 @@ impl<T> Tensor<T> {
 
     /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor it returns an error
     /// ```
-    /// # use rustnum::{Tensor, shape, coord, Shape, Coord};
+    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError};
     /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
     /// assert_eq!(t[coord!(0, 0, 0)], 0);
     /// assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
@@ -311,37 +321,46 @@ impl<T: Copy + std::ops::Add<Output = T>> Add<T> for Tensor<T> {
     }
 }
 
-// impl<T> Dot<Tensor<T>> for Tensor<T> where T: std::ops::Mul {
-//     type Output = Result<Tensor<T>, TensorError>;
+impl<T: Float> Stats for Tensor<T> {
+    type Output = T;
 
-//     fn dot(&self, b: Tensor<T>) -> Self::Output {
-//         let a_shape = self.shape();
-//         let b_shape = b.shape();
-//         if a_shape.len() > 2 || b.shape().len() > 2 {
-//             Err(TensorError::NotSupported)
-//         } else {
-//             let target_shape: Shape;
-//             if a_shape[1] == b_shape[0] {
-//                 target_shape = shape!(a_shape[0], b_shape[1]);
-//             } else {
-//                 return Err(TensorError::NotSupported);
-//             }
+    fn mean(&self) -> Self::Output {
+        let mut collector: T = T::zero();
+        self.iter().for_each(|component| {
+            collector = collector.add(*component.value);
+        });
 
-//             let out_tensor = Tensor::<T>::new_uninit(target_shape);
+        match T::from(self.len()) {
+            Some(v) => collector / v,
+            _ => panic!("Tensor len() shitted its pants"),
+        }
+    }
 
-//             for row in self.iter() {
-//                 let r_sum = 0.0;
-//                 for col in b.iter() {
-//                     r_sum = r_sum + (*row.value * *col.value);
-//                 }
-//             }
+    fn max(&self) -> Self::Output {
+        let mut m: T = Float::min_value();
+        self.iter().for_each(|component| {
+            if *component.value > m {
+                m = *component.value;
+            }
+        });
 
-//             Ok(out_tensor)
-//         }
-//     }
-// }
+        m
+    }
 
-/// A single component of a tensor
+    fn min(&self) -> Self::Output {
+        let mut m: T = Float::max_value();
+        self.iter().for_each(|component| {
+            if *component.value < m {
+                m = *component.value;
+            }
+        });
+
+        m
+    }
+}
+
+/// A single component of a tensor, usually returned by iterators at
+/// each iteration
 #[derive(Debug)]
 pub struct TensorComponent<'a, T> {
     pub coords: Coord,
@@ -375,7 +394,8 @@ impl<T: PartialEq + Ord> Ord for TensorComponent<'_, T> {
     }
 }
 
-/// Implements an iteration over a tensor
+/// Implements an iteration over a tensor. The iteration is performed
+/// according to the underlying coordinate iteration. See `CoordIterator`.
 pub struct TensorIterator<'a, T> {
     tensor: &'a Tensor<T>,
     coord_iter: CoordIterator<'a>,
@@ -415,7 +435,7 @@ pub struct TensorComponentMut<'a, T> {
     pub value: &'a mut T,
 }
 
-/// Implements a mutable iterator over a tensor
+/// Same as `TensorIterator`, but mutable.
 pub struct TensorIteratorMut<'a, T> {
     tensor: *mut Tensor<T>,
     coord_iter: CoordIterator<'a>,
@@ -535,5 +555,15 @@ mod test {
     fn uninit_at_no_panic() {
         let t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
         assert!(t.at(coord!(0, 1, 3)).is_some());
+    }
+
+    #[test]
+    fn stats() {
+        let generator: &TensorValueGenerator<f64> = &|_coord, i| i as f64;
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
+        assert_eq!(t.len(), 24);
+        assert_eq!(t.mean(), 11.5);
+        assert_eq!(t.max(), 23.0);
+        assert_eq!(t.min(), 0.0);
     }
 }

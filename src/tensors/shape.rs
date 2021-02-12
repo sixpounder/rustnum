@@ -68,6 +68,7 @@ impl Eq for Shape {}
 
 impl Shape {
     /// Creates a new shape with some `dimensions`
+    #[inline]
     pub fn new(dimensions: Vec<usize>) -> Self {
         if dimensions.iter().any(|f| *f == 0) {
             panic!("Zero value dimensions are not allowed in shapes");
@@ -81,6 +82,7 @@ impl Shape {
     }
 
     /// Creates an empty shape
+    #[inline]
     pub fn empty() -> Self {
         Self {
             dimensions: vec![],
@@ -89,6 +91,7 @@ impl Shape {
     }
 
     /// Creates a shape with `n_dimensions` set to 0
+    #[inline]
     pub fn zeroes(n_dimensions: usize) -> Self {
         let mut dimensions = Vec::with_capacity(n_dimensions);
         for _ in 0..n_dimensions {
@@ -104,21 +107,25 @@ impl Shape {
     }
 
     /// The number of dimension of this shape
+    #[inline]
     pub fn len(&self) -> usize {
         self.dimensions.len()
     }
 
     /// Returns the first dimension of this shape
+    #[inline]
     pub fn first(&self) -> Option<&usize> {
         self.dimensions.first()
     }
 
     /// Returns the last dimension of this shape
+    #[inline]
     pub fn last(&self) -> Option<&usize> {
         self.dimensions.last()
     }
 
     /// Returns `true` if some `other` shape is contained by this shape
+    #[inline]
     pub fn includes(&self, other: &Shape) -> bool {
         for i in 0..self.dimensions.len() {
             if self.dimensions[i] < other.dimensions[i] {
@@ -130,6 +137,7 @@ impl Shape {
     }
 
     /// Returns a new `Shape` with all but the first axis
+    #[inline]
     pub fn tail(&self) -> Shape {
         let slice: &[usize];
         if self.len() > 1 {
@@ -141,6 +149,7 @@ impl Shape {
     }
 
     /// Returns a new `Shape` with only the first axis (or an empty one if the original shape is empty)
+    #[inline]
     pub fn head(&self) -> Shape {
         if self.len() > 0 {
             Shape::new(vec![self.dimensions[0]])
@@ -149,6 +158,7 @@ impl Shape {
         }
     }
 
+    #[inline]
     pub fn replace_last(&self, value: usize) -> Shape {
         let mut t = self.tail();
         t.dimensions.push(value);
@@ -157,27 +167,32 @@ impl Shape {
     }
 
     /// Appends an axis to this shape
+    #[inline]
     pub fn append(&mut self, value: usize) {
         self.dimensions.push(value);
         self.scale_factors = compute_scale_factors(&self.dimensions);
     }
 
     /// Returns an iterator over the shape's axis
+    #[inline]
     pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.dimensions.iter()
     }
 
     /// Get the axis with index `idx`
+    #[inline]
     pub fn get_axis(&self, idx: usize) -> Option<&usize> {
         self.dimensions.get(idx)
     }
 
     /// Get the axis with index `idx` as mutable
+    #[inline]
     pub fn get_axis_mut(&mut self, idx: usize) -> Option<&mut usize> {
         self.dimensions.get_mut(idx)
     }
 
     /// The cardinality of this shape
+    #[inline]
     pub fn mul(&self) -> usize {
         let mut p = 1;
         self.dimensions.iter().for_each(|i| {
@@ -187,16 +202,19 @@ impl Shape {
     }
 
     /// The cardinality of a single axis in this shape
+    #[inline]
     pub fn axis_cardinality(&self, axis: usize) -> Option<&usize> {
         self.scale_factors.get(axis)
     }
 
     /// Returns 'true` if some `other` shape has the same cardinality as this shape
+    #[inline]
     pub fn equiv(&self, other: &Self) -> bool {
         self.mul() == other.mul()
     }
 
     /// An iterator over all the coordinates contained by this shape
+    #[inline]
     pub fn iter(&self) -> CoordIterator {
         CoordIterator::new(self)
     }
@@ -216,6 +234,7 @@ impl IndexMut<usize> for Shape {
 }
 
 /// Utility to compute axis cardinalities for later use
+#[inline]
 fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
     let mut scale_factors = Vec::with_capacity(dimensions.len());
     let mut i = 0;

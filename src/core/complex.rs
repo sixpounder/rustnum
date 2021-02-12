@@ -1,4 +1,4 @@
-use num_traits::{Float, Num};
+use num_traits::{Float, Num, One, Signed, Zero, float::FloatCore};
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -45,18 +45,43 @@ pub struct Complex<T: Num> {
     im: T,
 }
 
+
+impl<T: Clone + Signed> Complex<T> {
+    /// Returns the L1 norm `|re| + |im|` -- the [Manhattan distance] from the origin.
+    ///
+    /// [Manhattan distance]: https://en.wikipedia.org/wiki/Taxicab_geometry
+    #[inline]
+    pub fn l1_norm(&self) -> T {
+        self.re.abs() + self.im.abs()
+    }
+}
+
+impl<T: Float> One for Complex<T> {
+    fn one() -> Self {
+        Self {
+            re: T::one(),
+            im: T::zero(),
+        }
+    }
+}
+
+impl<T: Num> Zero for Complex<T> {
+    fn zero() -> Self {
+        Self {
+            re: T::zero(),
+            im: T::zero(),
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        return self.re.is_zero() && self.im.is_zero()
+    }
+}
+
 impl<T> Complex<T>
 where
     T: Num,
 {
-    /// Returns the immaginary unit as a complex number
-    pub fn i() -> Self {
-        Self {
-            re: T::zero(),
-            im: T::one(),
-        }
-    }
-
     /// Creates a new complex number from cartesian coordinates
     /// # Example
     /// ```
@@ -70,18 +95,24 @@ where
         }
     }
 
-    pub fn one() -> Self {
+    /// Returns the immaginary unit as a complex number
+    pub fn i() -> Self {
         Self {
-            re: T::one(),
-            im: T::zero(),
+            re: T::zero(),
+            im: T::one(),
         }
     }
 
-    pub fn zero() -> Self {
-        Self {
-            re: T::zero(),
-            im: T::zero(),
-        }
+    pub fn real(self) -> T {
+        self.re
+    }
+
+    pub fn immaginary(self) -> T {
+        self.im
+    }
+
+    pub fn to_tuple(self) -> (T, T) {
+        (self.re, self.im)
     }
 }
 
@@ -115,9 +146,21 @@ where
     #[inline]
     pub fn to_polar(&self) -> PolarCoordinate<T> {
         PolarCoordinate {
-            r: (self.re.powi(2) + self.im.powi(2)).sqrt(),
-            theta: (self.im / self.re).atan(),
+            r: self.norm(),
+            theta: self.arg(),
         }
+    }
+
+    /// Calculate the principal Arg of self.
+    #[inline]
+    pub fn arg(self) -> T {
+        self.im.atan2(self.re)
+    }
+
+    /// Calculate |self|
+    #[inline]
+    pub fn norm(self) -> T {
+        self.re.hypot(self.im)
     }
 
     /// The complex conjugate of the complex number `z = x + yi` is given by `x − yi`.
@@ -146,9 +189,16 @@ where
         self.re.clone() * self.re.clone() + self.im.clone() * self.im
     }
 
+    /// Computes 1 / self
+    /// # Example
+    /// ```
+    /// # use rustnum::Complex;
+    /// let c = Complex::new(12.0, 5.0);
+    /// assert_eq!(c.inv(), Complex::new(0.07100591715976332, -0.029585798816568046));
+    /// ```
     #[inline]
     pub fn inv(self) -> Self {
-        let norm_sqr = self.clone().norm_sqr();
+        let norm_sqr = self.norm_sqr();
         Self::new(self.re / norm_sqr.clone(), -self.im / norm_sqr)
     }
 
@@ -161,16 +211,6 @@ where
             im: (self.re.clone() * other.im) + (self.im.clone() * other.re),
         }
     }
-
-    // /// Divides two complex numbers. Used for the std::ops::Div implementation.
-    // #[inline]
-    // pub fn complex_div(&self, other: Self) -> Self {
-    //     let mul_factor = T::one() / (other.re.powi(2) * other.im.powi(2));
-    //     Self {
-    //         re: mul_factor * (self.re * other.re + self.im * other.im),
-    //         im: mul_factor * (self.im * other.re + self.re * other.im),
-    //     }
-    // }
 
     /// Raises `self` to a complex power.
     #[inline]
@@ -192,19 +232,9 @@ where
             exp.re * polar_coords.theta() + exp.im * polar_coords.r().ln(),
         )
     }
-}
-
-impl<T: Float> Complex<T> {
-    #[inline]
-    fn abs(self) -> Self {
-        Self {
-            re: self.re.abs(),
-            im: self.im.abs(),
-        }
-    }
 
     #[inline]
-    fn exp(self) -> Self {
+    pub fn exp(self) -> Self {
         Self {
             re: self.re.exp() * self.im.cos(),
             im: self.re.exp() * self.im.sin(),
@@ -219,14 +249,15 @@ impl<T: Float> Complex<T> {
     ///
     /// The branch satisfies `-π ≤ arg(ln(z)) ≤ π`.
     #[inline]
-    fn ln(self) -> Self {
+    pub fn ln(self) -> Self {
         // formula: ln(z) = ln|z| + i*arg(z)
         let polar_coords = self.to_polar();
         Self::new(polar_coords.r().ln(), polar_coords.theta())
     }
 
+    /// Raises `self` to a scalar power
     #[inline]
-    fn powf(self, exponent: T) -> Self {
+    pub fn powf(self, exponent: T) -> Self {
         // formula: x^y = (ρ e^(i θ))^y = ρ^y e^(i θ y)
         // = from_polar(ρ^y, θ y)
         let polar_coords = self.to_polar();
@@ -236,8 +267,9 @@ impl<T: Float> Complex<T> {
         )
     }
 
+    /// Computes the square root of this complex number
     #[inline]
-    fn sqrt(self) -> Self {
+    pub fn sqrt(self) -> Self {
         if self.im.is_zero() {
             if self.re.is_sign_positive() {
                 // simple positive real √r, and copy `im` for its sign
@@ -275,7 +307,7 @@ impl<T: Float> Complex<T> {
 
     /// Computes the sine of `self`.
     #[inline]
-    fn sin(self) -> Self {
+    pub fn sin(self) -> Self {
         // formula: sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
         Self::new(
             self.re.sin() * self.im.cosh(),
@@ -285,7 +317,7 @@ impl<T: Float> Complex<T> {
 
     /// Computes the cosine of `self`.
     #[inline]
-    fn cos(self) -> Self {
+    pub fn cos(self) -> Self {
         // formula: cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)
         Self::new(
             self.re.cos() * self.im.cosh(),
@@ -295,7 +327,7 @@ impl<T: Float> Complex<T> {
 
     /// Computes the hyperbolic sine of `self`.
     #[inline]
-    fn sinh(self) -> Self {
+    pub fn sinh(self) -> Self {
         // formula: sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
         Self::new(
             self.re.sinh() * self.im.cos(),
@@ -305,7 +337,7 @@ impl<T: Float> Complex<T> {
 
     /// Computes the hyperbolic cosine of `self`.
     #[inline]
-    fn cosh(self) -> Self {
+    pub fn cosh(self) -> Self {
         // formula: cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
         Self::new(
             self.re.cosh() * self.im.cos(),
@@ -313,12 +345,25 @@ impl<T: Float> Complex<T> {
         )
     }
 
-    fn atan(self) -> Self {
-        todo!()
+    #[inline]
+    pub fn atan(self) -> Self {
+        // formula: arctan(z) = (ln(1+iz) - ln(1-iz))/(2i)
+        let i = Self::i();
+        let one = Self::one();
+        let two = one + one;
+        ((one + i * self).ln() - (one - i * self).ln()) / (two * i)
     }
 
     #[inline]
-    fn acos(self) -> Self {
+    pub fn abs(self) -> Self {
+        Self {
+            re: self.re.abs(),
+            im: self.im.abs(),
+        }
+    }
+
+    #[inline]
+    pub fn acos(self) -> Self {
         // formula: arccos(z) = -i ln(i sqrt(1-z^2) + z)
         let i = Self::i();
         -i * (i * (Self::one() - (self * self)).sqrt() + self).ln()
@@ -333,28 +378,55 @@ impl<T: Float> Complex<T> {
     ///
     /// The branch satisfies `-π/2 ≤ Re(asin(z)) ≤ π/2`.
     #[inline]
-    fn asin(self) -> Self {
+    pub fn asin(self) -> Self {
         // formula: arcsin(z) = -i ln(sqrt(1-z^2) + iz)
         let i = Self::i();
         -i * ((Self::one() - self * self).sqrt() + i * self).ln()
     }
 
-    fn is_zero(&self) -> bool {
-        todo!()
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self.re.is_zero() && self.im.is_zero()
     }
 
-    fn is_sign_positive(&self) -> bool {
-        todo!()
+    #[inline]
+    pub fn is_sign_positive(&self) -> bool {
+        self.re.is_sign_positive()
+    }
+}
+
+impl<T: FloatCore> Complex<T> {
+    /// Checks if the given complex number is NaN
+    #[inline]
+    pub fn is_nan(self) -> bool {
+        self.re.is_nan() || self.im.is_nan()
+    }
+
+    /// Checks if the given complex number is infinite
+    #[inline]
+    pub fn is_infinite(self) -> bool {
+        !self.is_nan() && (self.re.is_infinite() || self.im.is_infinite())
+    }
+
+    /// Checks if the given complex number is finite
+    #[inline]
+    pub fn is_finite(self) -> bool {
+        self.re.is_finite() && self.im.is_finite()
+    }
+
+    /// Checks if the given complex number is normal
+    #[inline]
+    pub fn is_normal(self) -> bool {
+        self.re.is_normal() && self.im.is_normal()
     }
 }
 
 impl<T: Float + std::fmt::Display> Display for Complex<T> {
     /// Displays a complex number in the form a+ib
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let zero = T::zero();
-        if self.im < zero {
+        if self.im.is_sign_negative() {
             write!(f, "{}-i{}", self.re, self.im.abs())
-        } else if self.im > zero {
+        } else if self.im.is_sign_positive() {
             write!(f, "{}+i{}", self.re, self.im)
         } else {
             write!(f, "{}", self.re)
@@ -491,8 +563,8 @@ where
 
     fn div(self, rhs: T) -> Self::Output {
         Self {
-            re: Float::nan(),
-            im: Float::nan()
+            re: self.re / rhs,
+            im: self.im
         }
     }
 }
@@ -533,6 +605,22 @@ mod test {
     }
 
     #[test]
+    fn to_polar() {
+        let c = Complex::new(12.0, 5.0).to_polar();
+        //13e^i0.39479111969976155
+        assert_eq!(c.r(), 13.0);
+        assert_eq!(c.theta(), 0.3947911196997615);
+    }
+
+    #[test]
+    fn from_polar() {
+        let c = Complex::from_polar(13.0, 0.3947911196997615);
+        //13e^i0.39479111969976155
+        assert_eq!(c.re, 12.0);
+        assert_eq!(c.im, 5.0);
+    }
+
+    #[test]
     fn sub() {
         let c = Complex::new(3.0, 4.0);
         assert_eq!(c - 1.0, Complex { re: 2.0, im: 4.0 });
@@ -567,7 +655,7 @@ mod test {
             p,
             PolarCoordinate {
                 r: 13.0,
-                theta: 0.39479111969976155
+                theta: 0.3947911196997615
             }
         );
         assert_eq!(Complex::from_polar(p.r, p.theta), Complex::new(12.0, 5.0));
@@ -577,6 +665,12 @@ mod test {
     fn conjugate() {
         let c1: Complex<f64> = Complex::new(12.0, 5.0);
         assert_eq!(c1.conjugate(), Complex::new(12.0, -5.0));
+    }
+
+    #[test]
+    fn inv() {
+        let c = Complex::new(12.0, 5.0);
+        assert_eq!(c.inv(), Complex::new(0.07100591715976332, -0.029585798816568046));
     }
 
     #[test]

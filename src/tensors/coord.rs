@@ -10,6 +10,7 @@ pub struct Coord {
 
 impl Coord {
     /// Creates a new coordinate with `axis` as its components
+    #[inline]
     pub fn new(axis: Vec<usize>) -> Self {
         Self {
             axis: axis,
@@ -17,6 +18,7 @@ impl Coord {
     }
 
     /// Creates a new coordinate of `n_dimensions` component set to `0`
+    #[inline]
     pub fn zeroes(n_dimensions: usize) -> Self {
         let mut dimensions = Vec::with_capacity(n_dimensions);
         for _ in 0..n_dimensions {
@@ -30,21 +32,25 @@ impl Coord {
 
     /// Gets the value of the axis component at `idx` position.
     /// The same can be done with regular indexing (like `my_coord[0]`)
+    #[inline]
     pub fn get_axis(&self, idx: usize) -> Option<&usize> {
         self.axis.get(idx)
     }
 
     /// `get_axis` mutable output variant
+    #[inline]
     pub fn get_axis_mut(&mut self, idx: usize) -> Option<&mut usize> {
         self.axis.get_mut(idx)
     }
 
     /// An iterator over the coordinate components
+    #[inline]
     pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.axis.iter()
     }
 
     /// The cardinality of the coordinate (the multiplication of all its components)
+    #[inline]
     pub fn cardinality(&self) -> usize {
         let mut cardinality = 1;
         self.axis.iter().for_each(|i| {
