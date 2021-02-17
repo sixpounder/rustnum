@@ -13,11 +13,9 @@
 mod tensors;
 mod generators;
 mod core;
-pub mod ranges;
 pub mod distributions;
 pub mod linalg;
 pub mod ops;
 
 pub use self::core::*;
 pub use tensors::*;
-pub use generators::*;

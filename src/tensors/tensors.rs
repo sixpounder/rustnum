@@ -1,10 +1,6 @@
 use std::ops::{Add, Index, IndexMut, Mul};
-
 use num_traits::Float;
-
-use crate::{Coord, CoordIterator, Shape};
-
-use super::stats::Stats;
+use crate::{Coord, CoordIterator, Shape, ops::Stats};
 
 type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
@@ -200,9 +196,11 @@ impl<T> Tensor<T> {
     pub fn iter(&self) -> TensorIterator<T> {
         TensorIterator::new(self)
     }
-}
 
-impl<T: Copy> Tensor<T> {
+    pub fn iter_mut(&mut self) -> TensorIteratorMut<T> {
+        TensorIteratorMut::new(self)
+    }
+
     /// Reshapes this tensor into a different shape. The new shape must be coherent
     /// with the number of values contained by the current one.
     pub fn reshape(&mut self, t_shape: Shape) {
@@ -210,7 +208,9 @@ impl<T: Copy> Tensor<T> {
             self.shape = t_shape.clone();
         }
     }
+}
 
+impl<T: Copy> Tensor<T> {
     /// Returns a flattened tensor with all the tensor values copied inside it.
     /// This is equivalent to reshaping the tensor to a single dimension equal to the
     /// multiplication of all the axis and cloning it
@@ -224,10 +224,6 @@ impl<T: Copy> Tensor<T> {
     /// Returns a flattened vector with all the tensor values copied inside it
     pub fn to_vec(&self) -> Vec<T> {
         self.values.clone()
-    }
-
-    pub fn iter_mut(&mut self) -> TensorIteratorMut<T> {
-        TensorIteratorMut::new(self)
     }
 }
 

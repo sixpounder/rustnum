@@ -1,4 +1,3 @@
-mod stats;
 mod shape;
 #[macro_export]
 macro_rules! shape {
@@ -34,4 +33,3 @@ mod tensors;
 pub use tensors::*;
 pub use shape::*;
 pub use coord::*;
-pub use stats::*;
