@@ -1,4 +1,4 @@
-use num_traits::{Float, FloatConst};
+use num_traits::{Float, FloatConst, Pow};
 use crate::ops::{BinomialTerm, Factorial};
 use crate::{generators::density, Coord, Shape, Tensor};
 use std::ops::Range;
@@ -101,7 +101,7 @@ pub fn poisson(range: Range<i32>, step: i32, expected: f64) -> Tensor<f64>
     let mut x = range.start;
     let mut i = 0;
     while x < range.end {
-        let k = x;
+        let k: u64 = x as u64;
         let value: f64 = (expected.powi(x) * (-expected).exp()) / k.factorial() as f64;
         distribution.set(&coord!(i), value).unwrap();
         i += 1;
@@ -131,11 +131,28 @@ pub fn bernoulli(range: Range<i32>, step: i32, p: f64) -> Tensor<f64> {
     distribution
 }
 
+fn binomial_core(n: u64, k: u64, p: f64) -> f64 {
+    let one_minus_p: f64 = 1.0 - p;
+    let binomial_term: f64 = (n, k).binomial_term() as f64;
+    let p_to_k = p.powi(k as i32);
+    let one_minus_p_to_n_minus_k = one_minus_p.powi((n - k) as i32);
+    let value = p_to_k * one_minus_p_to_n_minus_k * binomial_term;
+
+    value
+}
+
 /// The binomial distribution with parameters `n` and `p` is the discrete probability distribution
 /// of the number of successes in a sequence of `n` independent experiments, each asking
 /// a yes–no question, and each with its own Boolean-valued outcome: success (with probability `p`)
 /// or failure (with probability `q = 1 − p`).
-pub fn binomial(range: Range<i32>, step: i32, n: i32, p: f64) -> Tensor<f64> {
+/// # Example
+/// ```
+/// # use rustnum::distributions::binomial;
+/// # use rustnum::{Tensor, shape, Shape, coord, Coord};
+/// let dist = binomial(5..7, 20, 0.3);
+/// assert_eq!(dist.len(), 2);
+/// assert_eq!(dist[coord!(0)], 0.1788630505698795);
+pub fn binomial(range: Range<u32>, n: u64, p: f64) -> Tensor<f64> {
     let d_size = range.end - range.start;
 
     let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(d_size as usize));
@@ -143,12 +160,9 @@ pub fn binomial(range: Range<i32>, step: i32, n: i32, p: f64) -> Tensor<f64> {
     let mut k = range.start;
     let mut i = 0;
     while k < range.end {
-        let one_minus_p: f64 = 1.0 - p;
-        let binomial_term: f64 = f64::from((n, k).binomial_term());
-        let value = p.powi(k) * one_minus_p.powi(n - k) * binomial_term;
-        distribution.set(&coord!(i), value).unwrap();
+        distribution.set(&coord!(i), binomial_core(n, k as u64, p)).unwrap();
         i += 1;
-        k += step;
+        k += 1;
     }
 
     distribution
@@ -197,5 +211,12 @@ mod test {
         assert_eq!(dist[coord!(2)], 0.25651562069968376);
         assert_eq!(dist[coord!(3)], 0.21376301724973645);
         assert_eq!(dist[coord!(4)], 0.13360188578108528);
+    }
+
+    #[test]
+    fn binomial_distribution() {
+        let dist = binomial(5..7, 20, 0.3);
+        assert_eq!(dist.len(), 2);
+        assert_eq!(dist[coord!(0)], 0.1788630505698795);
     }
 }

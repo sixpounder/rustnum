@@ -1,4 +1,4 @@
-use num_traits::Num;
+use num_traits::{Num, Zero};
 
 pub trait Stats {
     type Output;
@@ -36,13 +36,78 @@ pub trait Factorial {
     fn factorial(&self) -> Self;
 }
 
+impl Factorial for u8 {
+    fn factorial(&self) -> Self {
+        if *self == 0 {
+            1
+        } else {
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
+        }
+    }
+}
+
+impl Factorial for u16 {
+    fn factorial(&self) -> Self {
+        if *self == 0 {
+            1
+        } else {
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
+        }
+    }
+}
+
+impl Factorial for u32 {
+    fn factorial(&self) -> Self {
+        if self.is_zero() {
+            1
+        } else {
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
+        }
+    }
+}
+
+impl Factorial for u64 {
+    fn factorial(&self) -> Self {
+        if *self == 0 {
+            1
+        } else {
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
+        }
+    }
+}
+
 impl Factorial for i8 {
     fn factorial(&self) -> Self {
         assert!(*self >= 0);
         if *self == 0 {
             1
         } else {
-            self * (self - 1).factorial()
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
         }
     }
 }
@@ -53,7 +118,12 @@ impl Factorial for i16 {
         if *self == 0 {
             1
         } else {
-            self * (self - 1).factorial()
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
         }
     }
 }
@@ -61,10 +131,15 @@ impl Factorial for i16 {
 impl Factorial for i32 {
     fn factorial(&self) -> Self {
         assert!(*self >= 0);
-        if *self == 0 {
+        if self.is_zero() {
             1
         } else {
-            self * (self - 1).factorial()
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
         }
     }
 }
@@ -75,7 +150,12 @@ impl Factorial for i64 {
         if *self == 0 {
             1
         } else {
-            self * (self - 1).factorial()
+            let mut acc: Self = 1;
+            for i in 2..=*self {
+                acc = acc * i;
+            }
+
+            acc
         }
     }
 }

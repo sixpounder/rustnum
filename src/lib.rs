@@ -7,7 +7,7 @@
 //! ```
 //! Generate an evenly spaced number range:
 //! ```rust
-//! let range = rustnum::ranges::arange(-5.0..4.9, 0.1);
+//! let range = rustnum::distributions::arange(-5.0..4.9, 0.1);
 //! ```
 #[macro_use]
 mod tensors;
