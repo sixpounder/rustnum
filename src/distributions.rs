@@ -1,4 +1,4 @@
-use num_traits::{Float, FloatConst, Pow};
+use num_traits::{Float, FloatConst};
 use crate::ops::{BinomialTerm, Factorial};
 use crate::{generators::density, Coord, Shape, Tensor};
 use std::ops::Range;
@@ -168,6 +168,38 @@ pub fn binomial(range: Range<u32>, n: u64, p: f64) -> Tensor<f64> {
     distribution
 }
 
+fn geometric_core(p: f64, x: u64) -> f64 {
+    (1.0 - p).powi(x as i32) * p
+}
+
+/// The geometric distribution describes the probability of experiencing a certain amount
+/// of failures before experiencing the first success in a series of Bernoulli trials.
+/// # Example
+/// ```
+/// # use rustnum::distributions::geometric;
+/// # use rustnum::{Tensor, shape, Shape, coord, Coord};
+/// let dist = geometric(0..4, 0.5);
+/// assert_eq!(dist.len(), 4);
+/// assert_eq!(dist[coord!(0)], 0.5);
+/// assert_eq!(dist[coord!(1)], 0.25);
+/// assert_eq!(dist[coord!(2)], 0.125);
+/// assert_eq!(dist[coord!(3)], 0.0625);
+/// ```
+pub fn geometric(range: Range<u64>, p: f64) -> Tensor<f64> {
+    let d_size = range.end - range.start;
+
+    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(d_size as usize));
+    let mut k = range.start;
+    let mut i = 0;
+    while k < range.end {
+        distribution.set(&coord!(i), geometric_core(p, k)).unwrap();
+        i += 1;
+        k += 1;
+    }
+
+    distribution
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -218,5 +250,15 @@ mod test {
         let dist = binomial(5..7, 20, 0.3);
         assert_eq!(dist.len(), 2);
         assert_eq!(dist[coord!(0)], 0.1788630505698795);
+    }
+
+    #[test]
+    fn geometric_distribution() {
+        let dist = geometric(0..4, 0.5);
+        assert_eq!(dist.len(), 4);
+        assert_eq!(dist[coord!(0)], 0.5);
+        assert_eq!(dist[coord!(1)], 0.25);
+        assert_eq!(dist[coord!(2)], 0.125);
+        assert_eq!(dist[coord!(3)], 0.0625);
     }
 }

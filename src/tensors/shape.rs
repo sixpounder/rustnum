@@ -1,4 +1,4 @@
-use std::ops::{Index, IndexMut};
+use std::{fmt::Display, ops::{Index, IndexMut}};
 use std::slice::Iter;
 use crate::{CoordIterator};
 
@@ -7,6 +7,13 @@ use crate::{CoordIterator};
 pub struct Shape {
     dimensions: Vec<usize>,
     scale_factors: Vec<usize>,
+}
+
+impl Display for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_list: Vec<String> = self.iter_axis().map(|axis| { axis.to_string() }).collect();
+        write!(f, "({})", string_list.join(","))
+    }
 }
 
 impl From<Vec<usize>> for Shape {
