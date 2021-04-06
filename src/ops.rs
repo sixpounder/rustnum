@@ -13,6 +13,18 @@ pub trait Dot<T> {
     fn dot(&self, rhs: T) -> Self::Output;
 }
 
+impl<T> Dot<Vec<T>> for Vec<T> where T: Num + Copy {
+    type Output = T;
+
+    fn dot(&self, rhs: Vec<T>) -> Self::Output {
+        let mut acc: Self::Output = T::zero();
+        for i in 0..self.len() {
+            acc = acc + (self[i] * rhs[i]);
+        }
+        acc
+    }
+}
+
 pub trait Trigo {
     type Output: ?Sized;
     fn sin(&self) -> Self::Output;

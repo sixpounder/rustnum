@@ -1,6 +1,6 @@
 use std::ops::{Add, Index, IndexMut, Mul};
-use num_traits::Float;
-use crate::{Coord, CoordIterator, Shape, ops::Stats};
+use num_traits::{Float, Num};
+use crate::{Coord, CoordIterator, Shape, ops::{Dot, Stats}};
 
 type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
 
@@ -387,6 +387,18 @@ impl<T: PartialEq + Ord> Ord for TensorComponent<'_, T> {
         } else {
             std::cmp::Ordering::Equal
         }
+    }
+}
+
+impl<T: Num + Copy> Dot<Vec<TensorComponent<'_, T>>> for Vec<TensorComponent<'_, T>> {
+    type Output = T;
+
+    fn dot(&self, rhs: Vec<TensorComponent<T>>) -> Self::Output {
+        let mut acc: Self::Output = T::zero();
+        for i in 0..self.len() {
+            acc = acc + (*self[i].value * *rhs[i].value);
+        }
+        acc
     }
 }
 
