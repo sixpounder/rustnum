@@ -103,7 +103,7 @@ pub fn poisson(range: Range<i32>, step: i32, expected: f64) -> Tensor<f64>
     while x < range.end {
         let k: u64 = x as u64;
         let value: f64 = (expected.powi(x) * (-expected).exp()) / k.factorial() as f64;
-        distribution.set(&coord!(i), value).unwrap();
+        distribution.set(coord!(i), value).unwrap();
         i += 1;
         x += step;
     }
@@ -123,7 +123,7 @@ pub fn bernoulli(range: Range<i32>, step: i32, p: f64) -> Tensor<f64> {
     while x < range.end {
         let one_minus_p: f64 = 1.0 - p;
         let value = p.powi(x) * one_minus_p.powi(1 - x);
-        distribution.set(&coord!(i), value).unwrap();
+        distribution.set(coord!(i), value).unwrap();
         i += 1;
         x += step;
     }
@@ -160,7 +160,7 @@ pub fn binomial(range: Range<u32>, n: u64, p: f64) -> Tensor<f64> {
     let mut k = range.start;
     let mut i = 0;
     while k < range.end {
-        distribution.set(&coord!(i), binomial_core(n, k as u64, p)).unwrap();
+        distribution.set(coord!(i), binomial_core(n, k as u64, p)).unwrap();
         i += 1;
         k += 1;
     }
@@ -192,7 +192,7 @@ pub fn geometric(range: Range<u64>, p: f64) -> Tensor<f64> {
     let mut k = range.start;
     let mut i = 0;
     while k < range.end {
-        distribution.set(&coord!(i), geometric_core(p, k)).unwrap();
+        distribution.set(coord!(i), geometric_core(p, k)).unwrap();
         i += 1;
         k += 1;
     }

@@ -1,4 +1,4 @@
-use std::ops::{Add, Index, IndexMut, Mul};
+use std::{any::Any, ops::{Add, Index, IndexMut, Mul}};
 use num_traits::{Float, Num};
 use crate::{Coord, CoordIterator, Shape, ops::{Dot, Stats}};
 
@@ -16,6 +16,13 @@ pub enum TensorError {
     /// Usually thrown when an operation on a tensor
     /// involving a set of coordinates not contained by the tensor was attempted
     NoCoordinate,
+    ThreadJoin,
+}
+
+impl<T> From<std::result::Result<T, Box<dyn Any + Send + 'static>>> for TensorError {
+    fn from(_: std::result::Result<T, Box<dyn Any + Send + 'static>>) -> Self {
+        Self::ThreadJoin
+    }
 }
 
 #[inline]
@@ -80,7 +87,7 @@ fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<
 /// // Set values
 /// tensor[coord!(0, 1, 2)] = 0.5;
 /// // or
-/// tensor.set(&coord!(0, 1, 2), 0.5);
+/// tensor.set(coord!(0, 1, 2), 0.5);
 /// ```
 #[derive(Debug)]
 pub struct Tensor<T> {
@@ -175,13 +182,13 @@ impl<T> Tensor<T> {
     /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError};
     /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
     /// assert_eq!(t[coord!(0, 0, 0)], 0);
-    /// assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
+    /// assert_ne!(t.set(coord!(0, 0, 0), 8), Err(TensorError::Set));
     /// assert_eq!(t[coord!(0, 0, 0)], 8);
     ///
     /// // Trying to set a value on a non existing coordinate will yield an error
-    /// assert_eq!(t.set(&coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
+    /// assert_eq!(t.set(coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
     /// ```
-    pub fn set(&mut self, coords: &Coord, value: T) -> Result<(), TensorError> {
+    pub fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError> {
         let idx = self.index_for_coords(&coords);
         match idx {
             Some(index) => {
@@ -295,7 +302,7 @@ impl<T: Copy + std::ops::Mul<Output = T>> Mul<T> for Tensor<T> {
         // out_tensor
         for item in self.iter() {
             out_tensor
-                .set(&item.coords, (*item.value * rhs).into())
+                .set(item.coords, (*item.value * rhs).into())
                 .unwrap();
         }
 
@@ -554,9 +561,9 @@ mod test {
     fn uninit() {
         let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
         assert_eq!(t[coord!(0, 0, 0)], 0);
-        assert_ne!(t.set(&coord!(0, 0, 0), 8), Err(TensorError::Set));
+        assert_ne!(t.set(coord!(0, 0, 0), 8), Err(TensorError::Set));
         assert_eq!(t[coord!(0, 0, 0)], 8);
-        assert_eq!(t.set(&coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
+        assert_eq!(t.set(coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
     }
 
     #[test]

@@ -62,21 +62,6 @@ pub fn matmul<T: Num + Copy>(a: Tensor<T>, b: Tensor<T>) -> Result<Tensor<T>, Te
     }
 }
 
-// struct MatmulOp<'a, T> {
-//     a: &'a Tensor<T>,
-//     b: &'a Tensor<T>,
-//     row: usize,
-//     col: usize,
-// }
-
-// unsafe impl<T> Send for MatmulOp<'_, T> {}
-
-// impl<'a, T> MatmulOp<'a, T> {
-//     pub fn new(a: &'a Tensor<T>, b: &'a Tensor<T>, row: usize, col: usize) -> Self {
-//         Self { a, b, row, col }
-//     }
-// }
-
 struct MatmulComponent<T> {
     pub row: usize,
     pub col: usize,
@@ -114,19 +99,19 @@ where
             let t_series_length = series_length;
             let calculate = move || {
                 // Retrieve A and B matrices
-                let ab = local_matrices
-                    .lock()
-                    .expect("Failed to acquire lock on resource");
+                let ab = local_matrices.lock().expect("Could not lock resource");
+                    // .expect("Failed to acquire lock on resource");
                 let local_a = &ab.0;
                 let local_b = &ab.1;
 
                 let mut results = vec![];
-                let mut acc = T::zero();
 
                 let this_row: Vec<TensorComponent<T>> =
                     local_a.iter().skip(row_index * t_series_length).take(t_series_length).collect();
 
                 for col_number in 0..series_length {
+                    let mut acc = T::zero();
+
                     let this_col: Vec<TensorComponent<T>> = local_b
                         .iter()
                         .skip(col_number)
@@ -146,7 +131,7 @@ where
                         );
                 }
 
-                results
+                Ok(results)
             };
 
             let t = thread::spawn(calculate);
@@ -154,11 +139,13 @@ where
         }
 
         for h in handles {
-            let results = h.join().unwrap();
-            for result in results.iter() {
+            let results = h.join().unwrap_or(Err(TensorError::ThreadJoin));
+            let unwrapped_results = results?;
+            for result in unwrapped_results.iter() {
                 out_tensor[coord!(result.row, result.col)] = result.value;
             }
         }
+
         Ok(out_tensor)
     }
 }
