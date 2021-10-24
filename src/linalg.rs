@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::{sync::{Arc, Mutex}, thread};
 
 use crate::{Coord, Shape, Tensor, TensorComponent, TensorError};
 use num_traits::Num;
@@ -14,9 +11,9 @@ use num_traits::Num;
 /// of rows in B a `TensorError` error will be returned.
 #[inline]
 pub fn matmul<T: Num + Copy>(a: Tensor<T>, b: Tensor<T>) -> Result<Tensor<T>, TensorError> {
-    let a_shape = a.shape();
-    let b_shape = b.shape();
-    if a.shape().len() > 2 || b.shape().len() > 2 {
+    let a_shape = a.shape_ref();
+    let b_shape = b.shape_ref();
+    if a.shape_ref().len() > 2 || b.shape_ref().len() > 2 {
         Err(TensorError::NotSupported)
     } else {
         let target_shape: Shape;
@@ -72,9 +69,9 @@ pub fn matmul_threaded<'a, T>(a: Tensor<T>, b: Tensor<T>) -> Result<Tensor<T>, T
 where
     T: Num + Copy + Send + 'static,
 {
-    let a_shape = a.shape();
-    let b_shape = b.shape();
-    if a.shape().len() > 2 || b.shape().len() > 2 {
+    let a_shape = a.shape_ref();
+    let b_shape = b.shape_ref();
+    if a.shape_ref().len() > 2 || b.shape_ref().len() > 2 {
         Err(TensorError::NotSupported)
     } else {
         let target_shape: Shape;
@@ -85,9 +82,12 @@ where
         }
 
         let series_length = target_shape[1];
-        let mut out_tensor = Tensor::<T>::new_uninit(target_shape.clone());
+        let out_tensor = Tensor::<T>::new_uninit(target_shape.clone());
         let mut handles = vec![];
         let matrices = Arc::new(Mutex::new((a, b)));
+        // let (tx, rx) = mpsc::channel();
+
+        let rc_out_tensor = Arc::new(Mutex::new(out_tensor));
 
         for nth_iteration in 0..target_shape[0] {
             // nth_iteration spans from 0 to the number of rows - 1 (i.e. row index)
@@ -97,6 +97,8 @@ where
             // let coords = coord!(nth_iteration, 0);
             let row_index = nth_iteration;
             let t_series_length = series_length;
+            // let local_tx = tx.clone();
+            let merger_tensor = Arc::clone(&rc_out_tensor);
             let calculate = move || {
                 // Retrieve A and B matrices
                 let ab = local_matrices.lock().expect("Could not lock resource");
@@ -131,22 +133,42 @@ where
                         );
                 }
 
-                Ok(results)
+                for result in results.iter() {
+                    merger_tensor.lock().unwrap()[coord!(result.row, result.col)] = result.value;
+                }
+
+                // Ok(results)
+                // local_tx.send(results).unwrap();
+
             };
 
-            let t = thread::spawn(calculate);
-            handles.push(t);
+            handles.push(thread::spawn(calculate));
         }
 
         for h in handles {
-            let results = h.join().unwrap_or(Err(TensorError::ThreadJoin));
-            let unwrapped_results = results?;
-            for result in unwrapped_results.iter() {
-                out_tensor[coord!(result.row, result.col)] = result.value;
-            }
+            h.join().unwrap();
         }
 
-        Ok(out_tensor)
+        // let merger_tensor = Arc::clone(&rc_out_tensor);
+        // let merger_t = thread::spawn(move || {
+        //     for received in rx.into_iter() {
+        //         for result in received.iter() {
+        //             merger_tensor.lock().unwrap()[coord!(result.row, result.col)] = result.value;
+        //         }
+        //     }
+        // });
+
+        // merger_t.join().unwrap();
+
+        // let tensor_ptr;
+        // let out_ptr;
+        // unsafe {
+        //     tensor_ptr = &*Arc::into_raw(rc_out_tensor);
+        //     out_ptr = tensor_ptr.into_inner().unwrap();
+        // }
+        
+        // Ok(out_ptr)
+        Err(TensorError::Thread)
     }
 }
 
@@ -181,7 +203,7 @@ mod test {
         println!("{}", duration.as_nanos());
         assert!(mul_res.is_ok());
         let t3 = mul_res.unwrap();
-        assert_eq!(t3.shape(), &shape!(2, 3));
+        assert_eq!(t3.shape_ref(), &shape!(2, 3));
         assert_eq!(t3[coord!(0, 0)], 13); // [1, 2, 4] dot [1, 2, 2]
         assert_eq!(t3[coord!(0, 1)], 26); // [1, 2, 4] dot [2, 4, 4]
         assert_eq!(t3[coord!(1, 1)], 44); // [2, 4, 6] dot [2, 4, 4]
@@ -216,7 +238,7 @@ mod test {
 
         assert!(mul_res.is_ok());
         let t3 = mul_res.unwrap();
-        assert_eq!(t3.shape(), &shape!(2, 3));
+        assert_eq!(t3.shape_ref(), &shape!(2, 3));
         assert_eq!(t3[coord!(0, 0)], 13); // [1, 2, 4] dot [1, 2, 2]
         assert_eq!(t3[coord!(0, 1)], 26); // [1, 2, 4] dot [2, 4, 4]
         assert_eq!(t3[coord!(1, 1)], 44); // [2, 4, 6] dot [2, 4, 4]
@@ -224,8 +246,8 @@ mod test {
 
     #[test]
     fn bench_matmul_very_big_inputs() {
-        let t1: Tensor<i32> = Tensor::new(shape!(40, 40), Some(&|_, _| { 1 }));
-        let t2: Tensor<i32> = Tensor::new(shape!(40, 40), Some(&|_, _| { 1 }));
+        let t1: Tensor<i32> = Tensor::ones(shape!(100, 100));
+        let t2: Tensor<i32> = Tensor::ones(shape!(100, 100));
         let start = std::time::Instant::now();
         let _mul_res: Result<Tensor<i32>, TensorError> = super::matmul(t1, t2);
         let end = std::time::Instant::now();
@@ -233,9 +255,21 @@ mod test {
         assert!(duration.as_millis() < 3000);
     }
     #[test]
+    fn bench_matmul_threaded_big_inputs() {
+        let t1: Tensor<i32> = Tensor::ones(shape!(40, 40));
+        let t2: Tensor<i32> = Tensor::ones(shape!(40, 40));
+        let start = std::time::Instant::now();
+        let _mul_res: Result<Tensor<i32>, TensorError> = super::matmul_threaded(t1, t2);
+        let end = std::time::Instant::now();
+        let duration = std::time::Duration::from(end - start);
+        assert!(duration.as_millis() < 3000);
+    }
+
+
+    #[test]
     fn bench_matmul_threaded_very_big_inputs() {
-        let t1: Tensor<i32> = Tensor::new(shape!(40, 40), Some(&|_, _| { 1 }));
-        let t2: Tensor<i32> = Tensor::new(shape!(40, 40), Some(&|_, _| { 1 }));
+        let t1: Tensor<i32> = Tensor::ones(shape!(100, 100));
+        let t2: Tensor<i32> = Tensor::ones(shape!(100, 100));
         let start = std::time::Instant::now();
         let _mul_res: Result<Tensor<i32>, TensorError> = super::matmul_threaded(t1, t2);
         let end = std::time::Instant::now();

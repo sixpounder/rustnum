@@ -1,27 +1,36 @@
-use std::{any::Any, ops::{Add, Index, IndexMut, Mul}};
+use crate::{
+    ops::{Dot, Stats},
+    Coord, CoordIterator, Shape,
+};
 use num_traits::{Float, Num};
-use crate::{Coord, CoordIterator, Shape, ops::{Dot, Stats}};
-
-type TensorValueGenerator<T> = dyn Fn(&Coord, u64) -> T;
+use std::{
+    any::Any,
+    ops::{Add, Index, IndexMut, Mul},
+};
 
 /// Enumeration for common errors on tensors
 #[derive(Debug, PartialEq)]
 pub enum TensorError {
     /// Tensor initialization error
     Init,
+
     /// An error occurred while setting a value on a tensor
     Set,
+
     /// This operation is not supported on tensors
     NotSupported,
+
     /// Usually thrown when an operation on a tensor
     /// involving a set of coordinates not contained by the tensor was attempted
     NoCoordinate,
-    ThreadJoin,
+
+    /// Some thread-related error
+    Thread,
 }
 
 impl<T> From<std::result::Result<T, Box<dyn Any + Send + 'static>>> for TensorError {
     fn from(_: std::result::Result<T, Box<dyn Any + Send + 'static>>) -> Self {
-        Self::ThreadJoin
+        Self::Thread
     }
 }
 
@@ -38,7 +47,10 @@ fn pos_for(shape: &Shape, coords: &Coord) -> usize {
 }
 
 #[inline]
-fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<T> {
+fn make_tensor<G, T>(shape: Shape, generator: G) -> Tensor<T>
+where
+    G: Fn(Coord, usize) -> T,
+{
     let shape_card = shape.mul();
     let mut values: Vec<T> = Vec::with_capacity(shape_card);
 
@@ -46,10 +58,10 @@ fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<
     unsafe {
         values.set_len(shape_card);
     }
-    let mut counter = 0;
+    let mut counter: usize = 0;
     for i in shape.iter() {
         let position = pos_for(&shape, &i);
-        values[position] = generator(&i, counter);
+        values[position] = generator(i, counter);
         counter += 1;
     }
 
@@ -59,6 +71,43 @@ fn make_tensor<T>(shape: &Shape, generator: &TensorValueGenerator<T>) -> Tensor<
     };
 
     out_tensor
+}
+
+pub trait TensorLike<T> {
+    fn shape(&self) -> Shape;
+    fn values(&self) -> Vec<&T>;
+    fn rank(&self) -> usize;
+    fn size(&self) -> usize;
+    fn at(&self, coords: Coord) -> Option<&T>;
+    fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError>;
+}
+
+impl<T> TensorLike<T> for Vec<T> {
+    fn shape(&self) -> Shape {
+        shape!(self.len())
+    }
+
+    fn values(&self) -> Vec<&T> {
+        self.iter().collect()
+    }
+
+    fn at(&self, coords: Coord) -> Option<&T> {
+        self.get(coords[0])
+    }
+
+    fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError> {
+        let idx = coords.cardinality();
+        self[idx] = value;
+        Ok(())
+    }
+
+    fn rank(&self) -> usize {
+        self.shape().len()
+    }
+
+    fn size(&self) -> usize {
+        self.shape().mul()
+    }
 }
 
 /// A tensor is simply a multidimensional array containing items of some kind. It is the struct
@@ -95,6 +144,60 @@ pub struct Tensor<T> {
     shape: Shape,
 }
 
+impl<T> TensorLike<T> for Tensor<T> {
+    /// Gets the shape of this tensor
+    #[inline]
+    fn shape(&self) -> Shape {
+        self.shape.clone()
+    }
+
+    #[inline]
+    fn values(&self) -> Vec<&T> {
+        self.values.iter().collect()
+    }
+
+    /// Gets the value at coordinates `coord`, if any
+    #[inline]
+    fn at(&self, coords: Coord) -> Option<&T> {
+        let idx = self.index_for_coords(&coords);
+        match idx {
+            Some(index) => self.values.get(index),
+            None => None,
+        }
+    }
+
+    /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor it returns an error
+    /// ```
+    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError};
+    /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
+    /// assert_eq!(t[coord!(0, 0, 0)], 0);
+    /// assert_ne!(t.set(coord!(0, 0, 0), 8), Err(TensorError::Set));
+    /// assert_eq!(t[coord!(0, 0, 0)], 8);
+    ///
+    /// // Trying to set a value on a non existing coordinate will yield an error
+    /// assert_eq!(t.set(coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
+    /// ```
+    #[inline]
+    fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError> {
+        let idx = self.index_for_coords(&coords);
+        match idx {
+            Some(index) => {
+                self.values[index] = value;
+                Ok(())
+            }
+            None => Err(TensorError::NoCoordinate),
+        }
+    }
+
+    fn rank(&self) -> usize {
+        self.shape().len()
+    }
+
+    fn size(&self) -> usize {
+        self.shape().mul()
+    }
+}
+
 impl<T> Tensor<T> {
     /// Same as `new`, but Creates an empty tensor with uninitialized memory.
     /// This is significantly faster than `new`
@@ -108,21 +211,44 @@ impl<T> Tensor<T> {
     /// assert!(empty.at(coord!(0, 0)).is_some());
     /// ```
     pub fn new_uninit(shape: Shape) -> Tensor<T> {
-        make_tensor(&shape, &|_, _| unsafe {
+        make_tensor(shape, |_, _| unsafe {
             // std::mem::MaybeUninit::uninit().assume_init()
             std::mem::MaybeUninit::zeroed().assume_init()
         })
     }
 
+    /// Creates a new tensor with a value generator
+    /// # Example
+    /// ```
+    /// # use rustnum::{Tensor, shape, Shape, Coord};
+    /// let generator = &|coord: &Coord, counter: u64| {
+    ///     // For example, make every number equal to
+    ///     // the cardinality of the coordinate plus the counter
+    ///     coord.cardinality() as f64 + counter as f64
+    /// };
+    ///
+    /// let tensor: Tensor<f64> = Tensor::new(
+    ///     shape!(3, 4, 10),
+    ///     Some(generator)
+    /// );
+    /// ```
+    ///
+    pub fn new<G>(shape: Shape, generator: G) -> Self
+    where
+        G: Fn(Coord, usize) -> T,
+    {
+        make_tensor(shape, generator)
+    }
+
     /// Gets the shape of this tensor
-    pub fn shape(&self) -> &Shape {
+    pub fn shape_ref(&self) -> &Shape {
         &self.shape
     }
 
     /// Gets the shape of this tensor as mutable
-    pub fn shape_mut(&mut self) -> &mut Shape {
-        &mut self.shape
-    }
+    // fn shape_mut(&mut self) -> &mut Shape {
+    //     &mut self.shape
+    // }
 
     /// Internal utility function for estabilishin a flattened index to assign
     /// coords to
@@ -137,15 +263,7 @@ impl<T> Tensor<T> {
     }
 
     /// Gets the value at coordinates `coord`, if any
-    pub fn at(&self, coords: Coord) -> Option<&T> {
-        let idx = self.index_for_coords(&coords);
-        match idx {
-            Some(index) => self.values.get(index),
-            None => None,
-        }
-    }
-
-    /// Gets the value at coordinates `coord`, if any
+    #[inline]
     pub fn at_ref(&self, coords: &Coord) -> Option<&T> {
         let idx = self.index_for_coords(&coords);
         match idx {
@@ -154,7 +272,8 @@ impl<T> Tensor<T> {
         }
     }
 
-    /// Gets the value at coordinates `coord`, if any. The returned value is mutable.
+    /// Gets the value at coordinates `coord`, if any. The returned reference is mutable.
+    #[inline]
     pub fn at_mut(&mut self, coords: Coord) -> Option<&mut T> {
         let idx = self.index_for_coords(&coords);
         match idx {
@@ -163,7 +282,9 @@ impl<T> Tensor<T> {
         }
     }
 
-    /// Gets the value at coordinates `&coord`, if any. The returned value is mutable.
+    /// Gets the value at coordinates `coord`, if any, using a reference to coords instead of a
+    /// moved value. The returned reference is mutable.
+    #[inline]
     pub fn at_ref_mut(&mut self, coords: &Coord) -> Option<&mut T> {
         let idx = self.index_for_coords(&coords);
         match idx {
@@ -173,31 +294,9 @@ impl<T> Tensor<T> {
     }
 
     /// The total number of items in this tensor
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor it returns an error
-    /// ```
-    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError};
-    /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
-    /// assert_eq!(t[coord!(0, 0, 0)], 0);
-    /// assert_ne!(t.set(coord!(0, 0, 0), 8), Err(TensorError::Set));
-    /// assert_eq!(t[coord!(0, 0, 0)], 8);
-    ///
-    /// // Trying to set a value on a non existing coordinate will yield an error
-    /// assert_eq!(t.set(coord!(4, 1, 10), 10), Err(TensorError::NoCoordinate));
-    /// ```
-    pub fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError> {
-        let idx = self.index_for_coords(&coords);
-        match idx {
-            Some(index) => {
-                self.values[index] = value;
-                Ok(())
-            }
-            None => Err(TensorError::NoCoordinate),
-        }
-    }
+    // pub fn len(&self) -> usize {
+    //     self.values.len()
+    // }
 
     /// Returns an iterator over this tensor
     pub fn iter(&self) -> TensorIterator<T> {
@@ -251,8 +350,11 @@ impl<T: Default> Tensor<T> {
     /// );
     /// ```
     ///
-    pub fn new(shape: Shape, generator: Option<&TensorValueGenerator<T>>) -> Self {
-        make_tensor(&shape, generator.unwrap_or(&|_, _| T::default()))
+    pub fn new_with_default<G>(shape: Shape, generator: Option<G>) -> Self where G: Fn(Coord, usize) -> T {
+        match generator {
+            Some(f) => make_tensor(shape, f),
+            None => make_tensor(shape, |_, _| T::default())
+        }
     }
 }
 
@@ -264,6 +366,49 @@ where
     pub fn scale(&mut self, scalar: T) {
         for item in self.values.iter_mut() {
             *item = *item * scalar;
+        }
+    }
+}
+
+impl<T> Tensor<T>
+where
+    T: Clone,
+{
+    pub fn from_vec_with_shape(values: Vec<T>, shape: Shape) -> Tensor<T> {
+        let mut new_tensor = Self::from(values);
+        new_tensor.reshape(shape);
+
+        new_tensor
+    }
+}
+
+impl<T> Tensor<T>
+where
+    T: Num,
+{
+    /// Creates a tensor with a given shape and all values set to 1.
+    /// "1" is taken to be of the appropriate base type, which can be any type
+    /// for which the `Num` trait is implemented
+    pub fn ones(shape: Shape) -> Tensor<T> {
+        make_tensor(shape, |_, _| T::one())
+    }
+
+    /// Creates a tensor with a given shape and all values set to 0.
+    /// "0" is taken to be of the appropriate base type, which can be any type
+    /// for which the `Num` trait is implemented
+    pub fn zeros(shape: Shape) -> Tensor<T> {
+        make_tensor(shape, |_, _| T::zero())
+    }
+}
+
+impl<T> From<Vec<T>> for Tensor<T>
+where
+    T: Clone,
+{
+    fn from(values: Vec<T>) -> Self {
+        Self {
+            shape: values.shape(),
+            values,
         }
     }
 }
@@ -324,6 +469,52 @@ impl<T: Copy + std::ops::Add<Output = T>> Add<T> for Tensor<T> {
     }
 }
 
+impl<T> Add<Tensor<T>> for Tensor<T>
+where
+    T: Clone + Add<Output = T>,
+{
+    type Output = Tensor<T>;
+
+    fn add(self, rhs: Tensor<T>) -> Self::Output {
+        assert_eq!(self.shape(), rhs.shape());
+        let mut new_tensor = self.clone();
+        self.iter().for_each(|component| {
+            let coord = component.coords.clone();
+            new_tensor
+                .set(
+                    component.coords,
+                    component.value.clone() + rhs.at_ref(&coord).unwrap().clone(),
+                )
+                .unwrap();
+        });
+
+        new_tensor
+    }
+}
+
+impl<T> Mul<Tensor<T>> for Tensor<T>
+where
+    T: Clone + Mul<Output = T>,
+{
+    type Output = Tensor<T>;
+
+    fn mul(self, rhs: Tensor<T>) -> Self::Output {
+        assert_eq!(self.shape(), rhs.shape());
+        let mut new_tensor = self.clone();
+        self.iter().for_each(|component| {
+            let coord = component.coords.clone();
+            new_tensor
+                .set(
+                    component.coords,
+                    component.value.clone() * rhs.at_ref(&coord).unwrap().clone(),
+                )
+                .unwrap();
+        });
+
+        new_tensor
+    }
+}
+
 impl<T: Float> Stats for Tensor<T> {
     type Output = T;
 
@@ -333,14 +524,14 @@ impl<T: Float> Stats for Tensor<T> {
             collector = collector.add(*component.value);
         });
 
-        match T::from(self.len()) {
+        match T::from(self.size()) {
             Some(v) => collector / v,
             _ => panic!("Tensor len() shitted its pants"),
         }
     }
 
     fn max(&self) -> Self::Output {
-        let mut m: T = Float::min_value();
+        let mut m: T = T::min_value();
         self.iter().for_each(|component| {
             if *component.value > m {
                 m = *component.value;
@@ -420,7 +611,7 @@ impl<'a, T> TensorIterator<'a, T> {
     pub fn new(tensor: &'a Tensor<T>) -> Self {
         Self {
             tensor,
-            coord_iter: CoordIterator::new(tensor.shape()),
+            coord_iter: CoordIterator::new(tensor.shape_ref()),
         }
     }
 }
@@ -459,7 +650,7 @@ pub struct TensorIteratorMut<'a, T> {
 impl<'a, T> TensorIteratorMut<'a, T> {
     pub fn new(tensor: &'a mut Tensor<T>) -> Self {
         let t: *mut Tensor<T> = &mut *tensor;
-        let t_shape = tensor.shape();
+        let t_shape = tensor.shape_ref();
         let coord_iter = CoordIterator::new(t_shape);
         Self {
             tensor: t,
@@ -503,50 +694,66 @@ mod test {
     use super::*;
     #[test]
     fn new() {
-        let t = Tensor::<f64>::new(
+        let t = Tensor::new(
             shape!(2, 4, 3),
-            Some(&|coord, _| coord.cardinality() as f64),
+            |coord: Coord, _| coord.cardinality() as f64,
         );
-        assert_eq!(t.shape(), &shape!(2, 4, 3));
+        assert_eq!(t.shape_ref(), &shape!(2, 4, 3));
+    }
+
+    #[test]
+    fn zeros() {
+        let t: Tensor<f64> = Tensor::zeros(shape!(2, 3, 4, 5));
+        assert_eq!(t.rank(), 4);
+        assert_eq!(t.size(), 120);
+        assert!(t.iter().all(|e| { e.value == &0f64 }));
+    }
+
+    #[test]
+    fn ones() {
+        let t: Tensor<f64> = Tensor::ones(shape!(2, 3, 4, 5));
+        assert_eq!(t.rank(), 4);
+        assert_eq!(t.size(), 120);
+        assert!(t.iter().all(|e| { e.value == &1f64 }));
     }
 
     #[test]
     fn at() {
-        let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
-        assert_eq!(t.shape(), &shape!(2, 4, 3));
+        let generator = |coord: Coord, _| coord.cardinality() as f64;
+        let t = Tensor::new(shape!(2, 4, 3), generator);
+        assert_eq!(t.shape_ref(), &shape!(2, 4, 3));
         let test_value = t.at(coord!(1, 2, 2));
         assert_eq!(test_value, Some(&4.0));
     }
 
     #[test]
     fn iter_mut() {
-        let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
+        let generator = |coord: Coord, _| coord.cardinality() as f64;
+        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), generator);
         let c = t.iter_mut().count();
         assert_eq!(c, 24);
     }
 
     #[test]
     fn scalar_sum() {
-        let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
+        let generator = |coord: Coord, _| coord.cardinality() as f64;
+        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), generator);
         t = t + 2.0;
         assert_eq!(t.at(coord!(1, 2, 2)), Some(&6.0));
     }
 
     #[test]
     fn scalar_mul() {
-        let generator: &TensorValueGenerator<f64> = &|coord, _| coord.cardinality() as f64;
-        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
+        let generator = |coord: Coord, _| coord.cardinality() as f64;
+        let mut t = Tensor::<f64>::new(shape!(2, 4, 3), generator);
         t = t * 2.0;
         assert_eq!(t.at(coord!(1, 2, 2)), Some(&8.0));
     }
 
     #[test]
     fn ordering() {
-        let generator: &TensorValueGenerator<u64> = &|_, i| i;
-        let t = Tensor::<u64>::new(shape!(2, 4, 3), Some(generator));
+        let generator = |_, i| i as u64;
+        let t: Tensor<u64> = Tensor::new(shape!(2, 4, 3), generator);
 
         let min_component = t.iter().min().unwrap();
         assert_eq!(min_component.value, &0);
@@ -574,9 +781,9 @@ mod test {
 
     #[test]
     fn stats() {
-        let generator: &TensorValueGenerator<f64> = &|_coord, i| i as f64;
-        let t = Tensor::<f64>::new(shape!(2, 4, 3), Some(generator));
-        assert_eq!(t.len(), 24);
+        let generator = |_coord, i| i as f64;
+        let t = Tensor::<f64>::new(shape!(2, 4, 3), generator);
+        assert_eq!(t.size(), 24);
         assert_eq!(t.mean(), 11.5);
         assert_eq!(t.max(), 23.0);
         assert_eq!(t.min(), 0.0);

@@ -1,4 +1,5 @@
 use num_traits::{Float, FloatConst};
+use crate::TensorLike;
 use crate::ops::{BinomialTerm, Factorial};
 use crate::{generators::density, Coord, Shape, Tensor};
 use std::ops::Range;
@@ -21,9 +22,9 @@ pub fn normal<T: 'static + Default + Float + FloatConst>(
 
     let d_size = shape!(range_vec.len());
 
-    let gen = move |_: &Coord, i: u64| -> T { density(range_vec[i as usize], mean, scale) };
+    let gen = move |_: Coord, i: usize| -> T { density(range_vec[i], mean, scale) };
 
-    Tensor::<T>::new(d_size, Some(&gen))
+    Tensor::new(d_size, gen)
 }
 
 /// Generates a uniform distribution from start to end of `range` with each value incremented
@@ -54,9 +55,9 @@ where
 
     let d_size = shape!(range_vec.len());
 
-    let distribution: Tensor<T> = Tensor::<T>::new(
+    let distribution: Tensor<T> = Tensor::new(
         d_size,
-        Some(&move |_: &Coord, i: u64| -> T { range_vec[i as usize] }),
+        move |_: Coord, i: usize| -> T { range_vec[i] },
     );
 
     distribution
@@ -152,7 +153,7 @@ fn binomial_core(n: u64, k: u64, p: f64) -> f64 {
 /// let dist = binomial(5..7, 20, 0.3);
 /// assert_eq!(dist.len(), 2);
 /// assert_eq!(dist[coord!(0)], 0.1788630505698795);
-pub fn binomial(range: Range<u32>, n: u64, p: f64) -> Tensor<f64> {
+pub fn binomial(range: Range<u32>, n: u64, p: f64) -> impl TensorLike<f64> {
     let d_size = range.end - range.start;
 
     let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(d_size as usize));
@@ -202,34 +203,36 @@ pub fn geometric(range: Range<u64>, p: f64) -> Tensor<f64> {
 
 #[cfg(test)]
 mod test {
+    use crate::TensorLike;
+
     use super::*;
     #[test]
     fn range_distribution() {
         let dist: Tensor<f64> = arange(-5.0..4.9, 0.1);
-        assert_eq!(dist.len(), 100);
+        assert_eq!(dist.size(), 100);
     }
 
     #[test]
     fn reshape_distribution() {
         let mut dist: Tensor<f64> = arange(-5.0..4.9, 0.1);
-        assert_eq!(dist.len(), 100);
+        assert_eq!(dist.size(), 100);
         dist.reshape(shape!(20, 5));
-        assert_eq!(dist.shape(), &shape!(20, 5));
+        assert_eq!(dist.shape_ref(), &shape!(20, 5));
     }
 
     #[test]
     fn normal_distribution() {
         let dist: Tensor<f64> = normal(-5.0..4.9, 0.1, 0.0, 0.2);
-        assert_eq!(dist.len(), 100);
+        assert_eq!(dist.size(), 100);
     }
 
     #[test]
     fn normal_with_shape() {
         let mut dist = normal(-5.0..4.9, 0.1, 0.0, 0.2);
-        assert_eq!(dist.len(), 100);
+        assert_eq!(dist.size(), 100);
 
         dist.reshape(shape!(2, 50));
-        assert_eq!(dist.len(), 100);
+        assert_eq!(dist.size(), 100);
         // assert_eq!(dist.mean(), 0.0);
         assert_ne!(dist.at(coord!(0, 2)), None);
     }
@@ -237,7 +240,7 @@ mod test {
     #[test]
     fn poisson_distribution() {
         let dist = poisson(0..5, 1, 2.5);
-        assert_eq!(dist.len(), 5);
+        assert_eq!(dist.size(), 5);
         assert_eq!(dist[coord!(0)], 0.0820849986238988);
         assert_eq!(dist[coord!(1)], 0.205212496559747);
         assert_eq!(dist[coord!(2)], 0.25651562069968376);
@@ -248,14 +251,14 @@ mod test {
     #[test]
     fn binomial_distribution() {
         let dist = binomial(5..7, 20, 0.3);
-        assert_eq!(dist.len(), 2);
-        assert_eq!(dist[coord!(0)], 0.1788630505698795);
+        assert_eq!(dist.size(), 2);
+        assert_eq!(dist.at(coord!(0)).unwrap(), &0.1788630505698795);
     }
 
     #[test]
     fn geometric_distribution() {
         let dist = geometric(0..4, 0.5);
-        assert_eq!(dist.len(), 4);
+        assert_eq!(dist.size(), 4);
         assert_eq!(dist[coord!(0)], 0.5);
         assert_eq!(dist[coord!(1)], 0.25);
         assert_eq!(dist[coord!(2)], 0.125);
