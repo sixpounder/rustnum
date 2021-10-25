@@ -75,11 +75,38 @@ where
 
 pub trait TensorLike<T> {
     fn shape(&self) -> Shape;
-    fn values(&self) -> Vec<&T>;
     fn rank(&self) -> usize;
     fn size(&self) -> usize;
     fn at(&self, coords: Coord) -> Option<&T>;
     fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError>;
+    fn is_scalar(&self) -> bool {
+        self.shape().len() == 0
+    }
+}
+
+impl<T> TensorLike<T> for T
+where
+    T: Num,
+{
+    fn shape(&self) -> Shape {
+        shape!()
+    }
+
+    fn rank(&self) -> usize {
+        0
+    }
+
+    fn size(&self) -> usize {
+        1
+    }
+
+    fn at(&self, _coords: Coord) -> Option<&T> {
+        Some(self)
+    }
+
+    fn set(&mut self, _coords: Coord, _value: T) -> Result<(), TensorError> {
+        Ok(())
+    }
 }
 
 impl<T> TensorLike<T> for Vec<T> {
@@ -87,17 +114,12 @@ impl<T> TensorLike<T> for Vec<T> {
         shape!(self.len())
     }
 
-    fn values(&self) -> Vec<&T> {
-        self.iter().collect()
-    }
-
     fn at(&self, coords: Coord) -> Option<&T> {
         self.get(coords[0])
     }
 
     fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError> {
-        let idx = coords.cardinality();
-        self[idx] = value;
+        self[coords.cardinality()] = value;
         Ok(())
     }
 
@@ -115,8 +137,8 @@ impl<T> TensorLike<T> for Vec<T> {
 ///
 /// ## Create a tensor, read and write values
 /// ```
-/// # use rustnum::{Tensor, shape, Shape, Coord, coord};
-/// let generator = &|coord: &Coord, counter: u64| {
+/// # use rustnum::{Tensor, shape, Shape, Coord, coord, TensorLike};
+/// let generator = |coord: Coord, counter: usize| {
 ///     // For example, make every number equal to
 ///     // the cardinality of the coordinate plus the counter
 ///     coord.cardinality() as f64 + counter as f64
@@ -124,7 +146,7 @@ impl<T> TensorLike<T> for Vec<T> {
 ///
 /// let mut tensor: Tensor<f64> = Tensor::new(
 ///     shape!(3, 4, 10),
-///     Some(generator)
+///     generator
 /// );
 ///
 ///
@@ -151,14 +173,15 @@ impl<T> TensorLike<T> for Tensor<T> {
         self.shape.clone()
     }
 
-    #[inline]
-    fn values(&self) -> Vec<&T> {
-        self.values.iter().collect()
-    }
+    // #[inline]
+    // fn values(&self) -> Vec<&T> {
+    //     self.values.iter().collect()
+    // }
 
     /// Gets the value at coordinates `coord`, if any
     #[inline]
     fn at(&self, coords: Coord) -> Option<&T> {
+        // assert_eq!(coords.cardinality(), self.shape().ndim());
         let idx = self.index_for_coords(&coords);
         match idx {
             Some(index) => self.values.get(index),
@@ -168,7 +191,7 @@ impl<T> TensorLike<T> for Tensor<T> {
 
     /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor it returns an error
     /// ```
-    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError};
+    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError, TensorLike};
     /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
     /// assert_eq!(t[coord!(0, 0, 0)], 0);
     /// assert_ne!(t.set(coord!(0, 0, 0), 8), Err(TensorError::Set));
@@ -206,13 +229,12 @@ impl<T> Tensor<T> {
     /// or each access will resolve into undefined behavior.
     ///
     /// ```
-    /// # use rustnum::{Tensor, shape, coord, Shape, Coord};
+    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorLike};
     /// let empty: Tensor<f64> = Tensor::new_uninit(shape!(4, 7));
     /// assert!(empty.at(coord!(0, 0)).is_some());
     /// ```
     pub fn new_uninit(shape: Shape) -> Tensor<T> {
         make_tensor(shape, |_, _| unsafe {
-            // std::mem::MaybeUninit::uninit().assume_init()
             std::mem::MaybeUninit::zeroed().assume_init()
         })
     }
@@ -220,16 +242,15 @@ impl<T> Tensor<T> {
     /// Creates a new tensor with a value generator
     /// # Example
     /// ```
-    /// # use rustnum::{Tensor, shape, Shape, Coord};
-    /// let generator = &|coord: &Coord, counter: u64| {
-    ///     // For example, make every number equal to
-    ///     // the cardinality of the coordinate plus the counter
-    ///     coord.cardinality() as f64 + counter as f64
-    /// };
+    /// # use rustnum::{Tensor, shape, Shape, Coord, TensorLike};
     ///
     /// let tensor: Tensor<f64> = Tensor::new(
     ///     shape!(3, 4, 10),
-    ///     Some(generator)
+    ///     |coord: Coord, counter| {
+    ///         // For example, make every number equal to
+    ///         // the cardinality of the coordinate plus the counter
+    ///         coord.cardinality() as f64 + counter as f64
+    ///     }
     /// );
     /// ```
     ///
@@ -331,14 +352,25 @@ impl<T: Copy> Tensor<T> {
     pub fn to_vec(&self) -> Vec<T> {
         self.values.clone()
     }
+
+    /// Casts a tensor with some base type to another, given that the old type is
+    /// transformable into the new one
+    pub fn cast<O>(&self) -> Tensor<O>
+    where
+        T: Into<O>,
+    {
+        Tensor::new(self.shape(), |coord, _counter| {
+            self[coord].clone().into()
+        })
+    }
 }
 
 impl<T: Default> Tensor<T> {
     /// Creates a new tensor with a value generator
     /// # Example
     /// ```
-    /// # use rustnum::{Tensor, shape, Shape, Coord};
-    /// let generator = &|coord: &Coord, counter: u64| {
+    /// # use rustnum::{Tensor, shape, Shape, Coord, TensorLike};
+    /// let generator = |coord: Coord, counter: usize| {
     ///     // For example, make every number equal to
     ///     // the cardinality of the coordinate plus the counter
     ///     coord.cardinality() as f64 + counter as f64
@@ -346,14 +378,17 @@ impl<T: Default> Tensor<T> {
     ///
     /// let tensor: Tensor<f64> = Tensor::new(
     ///     shape!(3, 4, 10),
-    ///     Some(generator)
+    ///     generator
     /// );
     /// ```
     ///
-    pub fn new_with_default<G>(shape: Shape, generator: Option<G>) -> Self where G: Fn(Coord, usize) -> T {
+    pub fn new_with_default<G>(shape: Shape, generator: Option<G>) -> Self
+    where
+        G: Fn(Coord, usize) -> T,
+    {
         match generator {
             Some(f) => make_tensor(shape, f),
-            None => make_tensor(shape, |_, _| T::default())
+            None => make_tensor(shape, |_, _| T::default()),
         }
     }
 }
@@ -694,10 +729,9 @@ mod test {
     use super::*;
     #[test]
     fn new() {
-        let t = Tensor::new(
-            shape!(2, 4, 3),
-            |coord: Coord, _| coord.cardinality() as f64,
-        );
+        let t = Tensor::new(shape!(2, 4, 3), |coord: Coord, _| {
+            coord.cardinality() as f64
+        });
         assert_eq!(t.shape_ref(), &shape!(2, 4, 3));
     }
 

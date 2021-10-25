@@ -1,6 +1,9 @@
 mod shape;
 #[macro_export]
 macro_rules! shape {
+    () => {
+        Shape::empty()
+    };
     ( $( $x:expr ),* ) => {
         {
             let mut dims = Vec::<usize>::new();

@@ -119,6 +119,12 @@ impl Shape {
         self.dimensions.len()
     }
 
+    /// The number of dimension of this shape
+    #[inline]
+    pub fn ndim(&self) -> usize {
+        self.len()
+    }
+
     /// Returns the first dimension of this shape
     #[inline]
     pub fn first(&self) -> Option<&usize> {

@@ -33,13 +33,13 @@ pub fn normal<T: 'static + Default + Float + FloatConst>(
 /// ```
 /// # use std::ops::{Add, Range};
 /// # use rustnum::distributions::arange;
-/// # use rustnum::{Tensor, shape, Shape};
+/// # use rustnum::{Tensor, shape, Shape, TensorLike};
 /// let mut ranged_values: Tensor<f64> = arange(0.0..9.9, 0.1);
 /// // Tensor [0.0, 0.1, 0.2 .... 100.0]
-/// assert_eq!(ranged_values.len(), 100);
+/// assert_eq!(ranged_values.size(), 100);
 /// ranged_values.reshape(shape!(10, 2, 5));
-/// // Tensor [[[0.0, 0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8, 0.9], [ .... ]]]
-/// assert_eq!(ranged_values.shape(), &shape!(10, 2, 5));
+/// // Tensor [[[0.0, 0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8, 0.9]], [[ .... ]]]
+/// assert_eq!(ranged_values.shape(), shape!(10, 2, 5));
 /// ```
 pub fn arange<T>(range: Range<T>, step: T) -> Tensor<T>
 where
@@ -83,9 +83,9 @@ where
 /// ```
 /// # use rustnum::distributions::poisson;
 /// # use rustnum::distributions::arange;
-/// # use rustnum::{Tensor, shape, Shape, coord, Coord};
+/// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
 /// let dist = poisson(0..5, 1, 2.5);
-/// assert_eq!(dist.len(), 5);
+/// assert_eq!(dist.size(), 5);
 /// assert_eq!(dist[coord!(0)], 0.0820849986238988);
 /// assert_eq!(dist[coord!(1)], 0.205212496559747);
 /// assert_eq!(dist[coord!(2)], 0.25651562069968376);
@@ -149,11 +149,11 @@ fn binomial_core(n: u64, k: u64, p: f64) -> f64 {
 /// # Example
 /// ```
 /// # use rustnum::distributions::binomial;
-/// # use rustnum::{Tensor, shape, Shape, coord, Coord};
+/// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
 /// let dist = binomial(5..7, 20, 0.3);
-/// assert_eq!(dist.len(), 2);
+/// assert_eq!(dist.size(), 2);
 /// assert_eq!(dist[coord!(0)], 0.1788630505698795);
-pub fn binomial(range: Range<u32>, n: u64, p: f64) -> impl TensorLike<f64> {
+pub fn binomial(range: Range<u32>, n: u64, p: f64) -> Tensor<f64> {
     let d_size = range.end - range.start;
 
     let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(d_size as usize));
@@ -178,9 +178,9 @@ fn geometric_core(p: f64, x: u64) -> f64 {
 /// # Example
 /// ```
 /// # use rustnum::distributions::geometric;
-/// # use rustnum::{Tensor, shape, Shape, coord, Coord};
+/// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
 /// let dist = geometric(0..4, 0.5);
-/// assert_eq!(dist.len(), 4);
+/// assert_eq!(dist.size(), 4);
 /// assert_eq!(dist[coord!(0)], 0.5);
 /// assert_eq!(dist[coord!(1)], 0.25);
 /// assert_eq!(dist[coord!(2)], 0.125);
