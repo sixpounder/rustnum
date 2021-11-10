@@ -1,6 +1,6 @@
-use std::{fmt::Display, ops::{Index, IndexMut}, slice::Iter};
+use std::{fmt::Display, ops::{Index, IndexMut}, slice::Iter, vec};
 
-use crate::Shape;
+use crate::{Set, Shape};
 
 /// Represents a generic coordinate
 #[derive(Clone, Debug)]
@@ -25,6 +25,14 @@ impl Coord {
             dimensions.push(0);
         }
 
+        Self {
+            axis: dimensions
+        }
+    }
+
+    #[inline]
+    pub fn range(&self, start: usize, end: usize) -> Self {
+        let dimensions = self.axis[start..end].to_vec();
         Self {
             axis: dimensions
         }
@@ -60,6 +68,24 @@ impl Coord {
     }
 }
 
+impl Set for Coord {
+    type Item = usize;
+
+    fn at(&self, idx: usize) -> Option<&usize> {
+        self.get_axis(idx)
+    }
+
+    fn size(&self) -> usize {
+        self.axis.len()
+    }
+
+    fn empty() -> Self {
+        Self {
+            axis: vec![]
+        }
+    }
+}
+
 impl Index<usize> for Coord {
     type Output = usize;
     fn index(&self, idx: usize) -> &<Self as std::ops::Index<usize>>::Output {
@@ -78,6 +104,20 @@ impl PartialEq for Coord {
         let mut i = 0;
         while i < self.axis.len() {
             if other.axis[i] != self.axis[i] {
+                return false;
+            }
+            i += 1;
+        }
+
+        true
+    }
+}
+
+impl PartialEq<Shape> for Coord {
+    fn eq(&self, other: &Shape) -> bool {
+        let mut i: usize = 0;
+        for c in self.iter_axis() {
+            if other[i] != *c {
                 return false;
             }
             i += 1;

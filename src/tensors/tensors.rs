@@ -5,6 +5,7 @@ use crate::{
 use num_traits::{Float, Num};
 use std::{
     any::Any,
+    fmt::{Display, Formatter},
     ops::{Add, Index, IndexMut, Mul},
 };
 
@@ -181,11 +182,14 @@ impl<T> TensorLike<T> for Tensor<T> {
     /// Gets the value at coordinates `coord`, if any
     #[inline]
     fn at(&self, coords: Coord) -> Option<&T> {
-        // assert_eq!(coords.cardinality(), self.shape().ndim());
-        let idx = self.index_for_coords(&coords);
-        match idx {
-            Some(index) => self.values.get(index),
-            None => None,
+        if self.shape().is_scalar() {
+            Some(&self.values[0])
+        } else {
+            let idx = self.index_for_coords(&coords);
+            match idx {
+                Some(index) => self.values.get(index),
+                None => None,
+            }
         }
     }
 
@@ -222,6 +226,12 @@ impl<T> TensorLike<T> for Tensor<T> {
 }
 
 impl<T> Tensor<T> {
+    pub fn scalar(value: T) -> Self {
+        Self {
+            shape: shape!(),
+            values: vec![value],
+        }
+    }
     /// Same as `new`, but Creates an empty tensor with uninitialized memory.
     /// This is significantly faster than `new`
     /// but it leaves the tensor elements into uninitialized memory state.
@@ -261,15 +271,17 @@ impl<T> Tensor<T> {
         make_tensor(shape, generator)
     }
 
+    pub fn from_vec_with_shape(values: Vec<T>, shape: Shape) -> Tensor<T> {
+        let mut new_tensor = Self::from(values);
+        new_tensor.reshape(shape);
+
+        new_tensor
+    }
+
     /// Gets the shape of this tensor
     pub fn shape_ref(&self) -> &Shape {
         &self.shape
     }
-
-    /// Gets the shape of this tensor as mutable
-    // fn shape_mut(&mut self) -> &mut Shape {
-    //     &mut self.shape
-    // }
 
     /// Internal utility function for estabilishin a flattened index to assign
     /// coords to
@@ -338,30 +350,13 @@ impl<T> Tensor<T> {
 }
 
 impl<T: Copy> Tensor<T> {
-    /// Returns a flattened tensor with all the tensor values copied inside it.
-    /// This is equivalent to reshaping the tensor to a single dimension equal to the
-    /// multiplication of all the axis and cloning it
-    pub fn to_flat(&self) -> Tensor<T> {
-        Tensor {
-            shape: Shape::from(vec![self.shape.mul()]),
-            values: self.values.clone(),
-        }
-    }
-
-    /// Returns a flattened vector with all the tensor values copied inside it
-    pub fn to_vec(&self) -> Vec<T> {
-        self.values.clone()
-    }
-
     /// Casts a tensor with some base type to another, given that the old type is
     /// transformable into the new one
     pub fn cast<O>(&self) -> Tensor<O>
     where
         T: Into<O>,
     {
-        Tensor::new(self.shape(), |coord, _counter| {
-            self[coord].clone().into()
-        })
+        Tensor::new(self.shape(), |coord, _counter| self[coord].into())
     }
 }
 
@@ -409,11 +404,19 @@ impl<T> Tensor<T>
 where
     T: Clone,
 {
-    pub fn from_vec_with_shape(values: Vec<T>, shape: Shape) -> Tensor<T> {
-        let mut new_tensor = Self::from(values);
-        new_tensor.reshape(shape);
+    /// Returns a flattened tensor with all the tensor values copied inside it.
+    /// This is equivalent to reshaping the tensor to a single dimension equal to the
+    /// multiplication of all the axis and cloning it
+    pub fn to_flat(&self) -> Tensor<T> {
+        Tensor {
+            shape: Shape::from(vec![self.shape.mul()]),
+            values: self.values.clone(),
+        }
+    }
 
-        new_tensor
+    /// Returns a flattened vector with all the tensor values copied inside it
+    pub fn to_vec(&self) -> Vec<T> {
+        self.values.clone()
     }
 }
 
@@ -436,10 +439,7 @@ where
     }
 }
 
-impl<T> From<Vec<T>> for Tensor<T>
-where
-    T: Clone,
-{
+impl<T> From<Vec<T>> for Tensor<T> {
     fn from(values: Vec<T>) -> Self {
         Self {
             shape: values.shape(),
@@ -550,6 +550,19 @@ where
     }
 }
 
+impl<T> Display for Tensor<T> where T: Display + Copy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut last_res = Ok(());
+        for component in self.iter() {
+            last_res = write!(f, "{}", component.value);
+        }
+
+        last_res
+
+        // write!(f, "{}", t_repr)
+    }
+}
+
 impl<T: Float> Stats for Tensor<T> {
     type Output = T;
 
@@ -595,6 +608,13 @@ pub struct TensorComponent<'a, T> {
     pub coords: Coord,
     pub value: &'a T,
     pub tensor: &'a Tensor<T>,
+}
+
+impl<'a, T> TensorComponent<'a, T> {
+    pub fn is_terminal(&self) -> bool {
+        let higher_dims = self.tensor.shape.range(0, self.tensor.shape.len() - 1);
+        self.coords.range(0, self.coords.cardinality() - 1).eq(&higher_dims)
+    }
 }
 
 impl<T: std::cmp::PartialEq> PartialEq for TensorComponent<'_, T> {
@@ -821,5 +841,11 @@ mod test {
         assert_eq!(t.mean(), 11.5);
         assert_eq!(t.max(), 23.0);
         assert_eq!(t.min(), 0.0);
+    }
+
+    #[test]
+    fn display() {
+        let t: Tensor<f64> = Tensor::zeros(shape!(4, 3, 2));
+        println!("{}", t);
     }
 }

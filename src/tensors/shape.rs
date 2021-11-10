@@ -1,6 +1,10 @@
 use std::{fmt::Display, ops::{Index, IndexMut}};
 use std::slice::Iter;
-use crate::{CoordIterator};
+use crate::{CoordIterator, Set};
+
+pub trait Shapeable {
+    fn shape() -> Shape;
+}
 
 /// A shape is a description of a space with `n` independent dimensions
 #[derive(Debug)]
@@ -73,6 +77,21 @@ impl Clone for Shape {
 
 impl Eq for Shape {}
 
+impl Set for Shape {
+    type Item = usize;
+    fn at(&self, idx: usize) -> Option<&usize> {
+        self.get_axis(idx)
+    }
+
+    fn size(&self) -> usize {
+        self.len()
+    }
+
+    fn empty() -> Self {
+        Self::empty()
+    }
+}
+
 impl Shape {
     /// Creates a new shape with some `dimensions`
     #[inline]
@@ -85,6 +104,16 @@ impl Shape {
         Self {
             dimensions,
             scale_factors,
+        }
+    }
+
+    #[inline]
+    pub fn scalar() -> Self {
+        let dimensions = vec![];
+        let scale_factors = compute_scale_factors(&dimensions);
+        Self {
+            dimensions,
+            scale_factors
         }
     }
 
@@ -119,10 +148,25 @@ impl Shape {
         self.dimensions.len()
     }
 
+    #[inline]
+    pub fn is_scalar(&self) -> bool {
+        self.len() == 0
+    }
+
     /// The number of dimension of this shape
     #[inline]
     pub fn ndim(&self) -> usize {
         self.len()
+    }
+
+    #[inline]
+    pub fn range(&self, start: usize, end: usize) -> Self {
+        let dimensions = self.dimensions[start..end].to_vec();
+        let scale_factors = compute_scale_factors(&dimensions);
+        Shape {
+            dimensions,
+            scale_factors
+        }
     }
 
     /// Returns the first dimension of this shape
@@ -220,7 +264,8 @@ impl Shape {
         self.scale_factors.get(axis)
     }
 
-    /// Returns 'true` if some `other` shape has the same cardinality as this shape
+    /// Returns `true` if some `other` shape has the same cardinality as this shape. This is usually meant to
+    /// be checked to determine if a shape is reshapable into another.
     #[inline]
     pub fn equiv(&self, other: &Self) -> bool {
         self.mul() == other.mul()
