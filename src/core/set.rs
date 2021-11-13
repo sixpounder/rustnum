@@ -1,25 +1,24 @@
 use std::ops::Index;
 
-pub struct SetSlice<'a, T: Sized> {
-    head: &'a T,
+#[derive(Clone)]
+pub struct SetSlice<'a, T> {
+    head: *const T,
     n: usize,
+    _marker: std::marker::PhantomData<&'a T>,
 }
 
 impl<'a, T> SetSlice<'a, T> {
     pub fn new(head: &'a T, start: usize, end: usize) -> Self {
         Self {
-            head,
+            head: head as *const T,
             n: end - start,
+            _marker: std::marker::PhantomData,
         }
     }
 
     pub fn at(&self, index: usize) -> Option<&'a T> {
         if index < self.n {
-            let mut head_addr: *const T = self.head;
-            unsafe {
-                head_addr = head_addr.add(index);
-                Some(&*head_addr)
-            }
+            unsafe { Some(&*self.head.add(index)) }
         } else {
             None
         }
@@ -41,25 +40,37 @@ impl<T> Index<usize> for SetSlice<'_, T> {
 
     fn index(&self, index: usize) -> &Self::Output {
         self.at_unchecked(index)
-
     }
 }
 
-pub struct SetIterator<'a, T> {
+impl<T: PartialEq> PartialEq for SetSlice<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { *self.head == *other.head && self.n == other.n }
+    }
+}
+
+impl<'a, T> IntoIterator for SetSlice<'a, T> {
+    type Item = &'a T;
+
+    type IntoIter = SetIntoIterator<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SetIntoIterator::from_slice(self)
+    }
+}
+
+pub struct SetIntoIterator<'a, T> {
     slice: SetSlice<'a, T>,
     i: usize,
 }
 
-impl<'a, T> SetIterator<'a, T> {
+impl<'a, T> SetIntoIterator<'a, T> {
     pub fn from_slice(slice: SetSlice<'a, T>) -> Self {
-        Self {
-            slice,
-            i: 0,
-        }
+        Self { slice, i: 0 }
     }
 }
 
-impl<'a, T> Iterator for SetIterator<'a, T> {
+impl<'a, T> Iterator for SetIntoIterator<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -76,54 +87,46 @@ impl<'a, T> Iterator for SetIterator<'a, T> {
 pub trait Set {
     type Item;
 
-    fn empty() -> Self;
-
     /// Returns the item with index `idx` in this set or `None` if not found
     fn at(&self, idx: usize) -> Option<&Self::Item>;
 
     /// The number of items in this set
     fn size(&self) -> usize;
 
-    /// Gets a slice of this set from `start` to `end` (exclusive)
-    fn slice(&self, start: usize, end: usize) -> SetSlice<'_, Self::Item>
-    where
-        Self: Sized,
-    {
-        SetSlice::new(self.at_unchecked(0), start, end)
-    }
-
     /// Same as `at` but without panic check
     fn at_unchecked(&self, idx: usize) -> &Self::Item {
         self.at(idx).unwrap()
     }
 
-    fn same(&self, other: &Self) -> bool where Self::Item: PartialEq {
+    /// Gets a slice of this set from `start` to `end` (exclusive)
+    fn slice(&self, start: usize, end: usize) -> SetSlice<'_, Self::Item> {
+        SetSlice::new(self.at_unchecked(0), start, end)
+    }
+
+    fn as_set_slice(&self) -> SetSlice<'_, Self::Item> {
+        SetSlice::new(self.at_unchecked(0), 0, self.size())
+    }
+
+    fn enumerate(&self) -> SetIntoIterator<Self::Item> {
+        self.as_set_slice().into_iter()
+    }
+}
+
+impl<T: PartialEq> PartialEq for dyn Set<Item = T> {
+    fn eq(&self, other: &Self) -> bool {
         for i in 0..self.size() {
-            match other.at_unchecked(i) == self.at_unchecked(i) {
-                true => continue,
-                false => return false,
+            if other.at_unchecked(i) != self.at_unchecked(i) {
+                return false;
             }
         }
 
         true
-    }
-
-    fn as_slice(&self) -> SetSlice<'_, Self::Item> {
-        SetSlice::new(self.at_unchecked(0), 0, self.size())
-    }
-
-    fn enumerate(&self) -> SetIterator<Self::Item> {
-        SetIterator::from_slice(self.as_slice())
     }
 }
 
 impl<T> Set for Vec<T> {
     type Item = T;
 
-    fn empty() -> Self {
-        vec![]
-    }
-    
     fn at(&self, idx: usize) -> Option<&T> {
         self.get(idx)
     }
@@ -145,7 +148,7 @@ mod test {
     }
 
     #[test]
-    fn iter() {
+    fn iterator() {
         let set1 = vec![1, 2, 3, 4];
         let mut iter = set1.enumerate();
         assert_eq!(iter.next(), Some(&1));
@@ -156,15 +159,15 @@ mod test {
     }
 
     #[test]
-    fn eq() {
+    fn sets_equality() {
         let set1: Vec<u8> = vec![1, 2, 3, 4];
         let set2: Vec<u8> = vec![1, 2, 3, 4];
 
-        assert!(set1.same(&set2));
+        assert!(set1.as_set_slice() == set2.as_set_slice());
 
         let set1: Vec<u8> = vec![1, 2, 3, 4];
         let set2: Vec<u8> = vec![1, 4, 8, 16];
 
-        assert_eq!(set1.same(&set2), false);
+        assert_eq!(set1.as_set_slice() != set2.as_set_slice(), false);
     }
 }

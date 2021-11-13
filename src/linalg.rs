@@ -1,6 +1,6 @@
 use std::{sync::{Arc, Mutex}, thread};
 
-use crate::{Coord, Shape, Tensor, TensorComponent, TensorError};
+use crate::{Coord, coord, Shape, Tensor, TensorComponent, TensorError, shape};
 use num_traits::Num;
 
 /// Performs matrix multiplication AxB.

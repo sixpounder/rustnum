@@ -1,6 +1,10 @@
-use std::{fmt::Display, ops::{Index, IndexMut}};
-use std::slice::Iter;
 use crate::{CoordIterator, Set};
+use std::ops::Mul;
+use std::slice::Iter;
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 pub trait Shapeable {
     fn shape() -> Shape;
@@ -13,70 +17,6 @@ pub struct Shape {
     scale_factors: Vec<usize>,
 }
 
-impl Display for Shape {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string_list: Vec<String> = self.iter_axis().map(|axis| { axis.to_string() }).collect();
-        write!(f, "({})", string_list.join(","))
-    }
-}
-
-impl From<Vec<usize>> for Shape {
-    fn from(vec: Vec<usize>) -> Self {
-        Self::new(vec)
-    }
-}
-
-impl From<&[usize]> for Shape {
-    fn from(src: &[usize]) -> Self {
-        Self::new(Vec::from(src))
-    }
-}
-
-impl PartialEq<Self> for Shape {
-    fn eq(&self, other: &Self) -> bool {
-        for i in 0..self.dimensions.len() {
-            if self.dimensions[i] != other.dimensions[i] {
-                return false;
-            } else {
-                continue;
-            }
-        }
-
-        true
-    }
-}
-
-impl PartialEq<Vec<usize>> for Shape {
-    fn eq(&self, other: &Vec<usize>) -> bool {
-        for i in 0..self.dimensions.len() {
-            if self.dimensions[i] != other[i] {
-                return false;
-            } else {
-                continue;
-            }
-        }
-
-        true
-    }
-}
-
-impl Clone for Shape {
-    fn clone(&self) -> Self {
-        let mut dimensions: Vec<usize> = vec![];
-        self.dimensions.iter().for_each(|dim| {
-            dimensions.push(*dim);
-        });
-        let scale_factors = compute_scale_factors(&dimensions);
-
-        Self {
-            dimensions,
-            scale_factors,
-        }
-    }
-}
-
-impl Eq for Shape {}
-
 impl Set for Shape {
     type Item = usize;
     fn at(&self, idx: usize) -> Option<&usize> {
@@ -85,10 +25,6 @@ impl Set for Shape {
 
     fn size(&self) -> usize {
         self.len()
-    }
-
-    fn empty() -> Self {
-        Self::empty()
     }
 }
 
@@ -113,7 +49,7 @@ impl Shape {
         let scale_factors = compute_scale_factors(&dimensions);
         Self {
             dimensions,
-            scale_factors
+            scale_factors,
         }
     }
 
@@ -165,7 +101,7 @@ impl Shape {
         let scale_factors = compute_scale_factors(&dimensions);
         Shape {
             dimensions,
-            scale_factors
+            scale_factors,
         }
     }
 
@@ -248,9 +184,9 @@ impl Shape {
         self.dimensions.get_mut(idx)
     }
 
-    /// The cardinality of this shape
+    /// The cardinality of this shape (the multiplication of all its components)
     #[inline]
-    pub fn mul(&self) -> usize {
+    pub fn cardinality(&self) -> usize {
         let mut p = 1;
         self.dimensions.iter().for_each(|i| {
             p = p * i;
@@ -268,7 +204,7 @@ impl Shape {
     /// be checked to determine if a shape is reshapable into another.
     #[inline]
     pub fn equiv(&self, other: &Self) -> bool {
-        self.mul() == other.mul()
+        self.cardinality() == other.cardinality()
     }
 
     /// An iterator over all the coordinates contained by this shape
@@ -278,10 +214,71 @@ impl Shape {
     }
 }
 
+impl Display for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_list: Vec<String> = self.iter_axis().map(|axis| axis.to_string()).collect();
+        write!(f, "({})", string_list.join(","))
+    }
+}
+
+impl From<Vec<usize>> for Shape {
+    fn from(vec: Vec<usize>) -> Self {
+        Self::new(vec)
+    }
+}
+
+impl From<&[usize]> for Shape {
+    fn from(src: &[usize]) -> Self {
+        Self::new(Vec::from(src))
+    }
+}
+
+impl<S> PartialEq<S> for Shape
+where
+    S: Set<Item = usize>,
+{
+    fn eq(&self, other: &S) -> bool {
+        self.as_set_slice() == other.as_set_slice()
+    }
+}
+
+impl Clone for Shape {
+    fn clone(&self) -> Self {
+        let mut dimensions: Vec<usize> = vec![];
+        self.dimensions.iter().for_each(|dim| {
+            dimensions.push(*dim);
+        });
+        let scale_factors = compute_scale_factors(&dimensions);
+
+        Self {
+            dimensions,
+            scale_factors,
+        }
+    }
+}
+
 impl Index<usize> for Shape {
     type Output = usize;
     fn index(&self, idx: usize) -> &<Self as std::ops::Index<usize>>::Output {
         &self.dimensions[idx]
+    }
+}
+
+impl Mul<Shape> for Shape {
+    type Output = Shape;
+
+    fn mul(self, rhs: Shape) -> Self::Output {
+        let mut dims: Vec<usize> = vec![];
+        for i in 0..self.size() {
+            dims[i] = self.dimensions[i] * rhs.dimensions[i];
+        }
+
+        let scale_factors = compute_scale_factors(&dims);
+
+        Shape {
+            dimensions: dims,
+            scale_factors
+        }
     }
 }
 
@@ -315,6 +312,23 @@ fn compute_scale_factors(dimensions: &Vec<usize>) -> Vec<usize> {
     scale_factors
 }
 
+#[macro_export]
+macro_rules! shape {
+    () => {
+        Shape::empty()
+    };
+    ( $( $x:expr ),* ) => {
+        {
+            let mut dims = Vec::<usize>::new();
+            $(
+                dims.push($x);
+            )*
+            let o = Shape::new(dims);
+            o
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     use crate::{shape, Coord};
@@ -333,5 +347,18 @@ mod test {
         let s = shape!(3, 4, 9);
         let all_coords: Vec<Coord> = s.iter().collect();
         assert_eq!(all_coords.len(), 108);
+    }
+
+    #[test]
+    fn shape_equality() {
+        let shape_1 = shape!(3, 4, 9);
+        let shape_2 = shape!(3, 4, 9);
+
+        assert_eq!(shape_1, shape_2);
+
+        let shape_1 = shape!(3, 4, 9);
+        let shape_2 = shape!(1, 2, 3);
+
+        assert!(shape_1 != shape_2)
     }
 }

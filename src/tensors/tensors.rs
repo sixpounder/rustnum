@@ -1,6 +1,6 @@
 use crate::{
     ops::{Dot, Stats},
-    Coord, CoordIterator, Shape,
+    Coord, CoordIterator, Shape, shape
 };
 use num_traits::{Float, Num};
 use std::{
@@ -47,39 +47,15 @@ fn pos_for(shape: &Shape, coords: &Coord) -> usize {
     idx
 }
 
-#[inline]
-fn make_tensor<G, T>(shape: Shape, generator: G) -> Tensor<T>
-where
-    G: Fn(Coord, usize) -> T,
-{
-    let shape_card = shape.mul();
-    let mut values: Vec<T> = Vec::with_capacity(shape_card);
-
-    // `set_len` unsafe, but fast
-    unsafe {
-        values.set_len(shape_card);
-    }
-    let mut counter: usize = 0;
-    for i in shape.iter() {
-        let position = pos_for(&shape, &i);
-        values[position] = generator(i, counter);
-        counter += 1;
-    }
-
-    let out_tensor: Tensor<T> = Tensor {
-        shape: shape.clone(),
-        values,
-    };
-
-    out_tensor
-}
-
 pub trait TensorLike<T> {
     fn shape(&self) -> Shape;
     fn rank(&self) -> usize;
     fn size(&self) -> usize;
     fn at(&self, coords: Coord) -> Option<&T>;
     fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError>;
+    fn first(&self) -> Option<&T> {
+        self.at(Coord::zeroes(self.shape().ndim()))
+    }
     fn is_scalar(&self) -> bool {
         self.shape().len() == 0
     }
@@ -129,7 +105,7 @@ impl<T> TensorLike<T> for Vec<T> {
     }
 
     fn size(&self) -> usize {
-        self.shape().mul()
+        self.shape().cardinality()
     }
 }
 
@@ -221,11 +197,37 @@ impl<T> TensorLike<T> for Tensor<T> {
     }
 
     fn size(&self) -> usize {
-        self.shape().mul()
+        self.shape().cardinality()
     }
 }
 
 impl<T> Tensor<T> {
+    fn make_tensor<G>(shape: Shape, generator: G) -> Tensor<T>
+    where
+        G: Fn(Coord, usize) -> T,
+    {
+        let shape_card = shape.cardinality();
+        let mut values: Vec<T> = Vec::with_capacity(shape_card);
+
+        // `set_len` unsafe, but fast
+        unsafe {
+            values.set_len(shape_card);
+        }
+        let mut counter: usize = 0;
+        for i in shape.iter() {
+            let position = pos_for(&shape, &i);
+            values[position] = generator(i, counter);
+            counter += 1;
+        }
+
+        let out_tensor: Tensor<T> = Tensor {
+            shape: shape.clone(),
+            values,
+        };
+
+        out_tensor
+    }
+
     pub fn scalar(value: T) -> Self {
         Self {
             shape: shape!(),
@@ -244,7 +246,7 @@ impl<T> Tensor<T> {
     /// assert!(empty.at(coord!(0, 0)).is_some());
     /// ```
     pub fn new_uninit(shape: Shape) -> Tensor<T> {
-        make_tensor(shape, |_, _| unsafe {
+        Self::make_tensor(shape, |_, _| unsafe {
             std::mem::MaybeUninit::zeroed().assume_init()
         })
     }
@@ -268,7 +270,7 @@ impl<T> Tensor<T> {
     where
         G: Fn(Coord, usize) -> T,
     {
-        make_tensor(shape, generator)
+        Self::make_tensor(shape, generator)
     }
 
     pub fn from_vec_with_shape(values: Vec<T>, shape: Shape) -> Tensor<T> {
@@ -326,16 +328,24 @@ impl<T> Tensor<T> {
         }
     }
 
-    /// The total number of items in this tensor
-    // pub fn len(&self) -> usize {
-    //     self.values.len()
-    // }
-
-    /// Returns an iterator over this tensor
+    /// Returns an iterator over this tensor. The iteration order is defined by its shape, meaning it will iter by axis
+    /// priority. For example, a tensor like this:
+    /// ```ignore
+    /// # use crate::tensor;
+    /// let t1 = tensor!((2, 2, 3), [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
+    /// ```
+    /// will be iterated like this order in coordinates:
+    /// * (0, 0, 0)
+    /// * (0, 0, 1)
+    /// * (0, 0, 2)
+    /// * (0, 1, 0)
+    /// * (0, 1, 2)
+    /// * ...
     pub fn iter(&self) -> TensorIterator<T> {
         TensorIterator::new(self)
     }
 
+    /// Same as `iter`, but yelding mutable refs to tensor components
     pub fn iter_mut(&mut self) -> TensorIteratorMut<T> {
         TensorIteratorMut::new(self)
     }
@@ -346,6 +356,21 @@ impl<T> Tensor<T> {
         if self.shape.equiv(&t_shape) {
             self.shape = t_shape.clone();
         }
+    }
+
+    /// Returns a flattened tensor with all the tensor values copied inside it.
+    /// This is equivalent to reshaping the tensor to a single dimension equal to the
+    /// multiplication of all the axis and cloning it
+    pub fn to_flat(self) -> Tensor<T> {
+        Tensor {
+            shape: Shape::from(vec![self.shape.cardinality()]),
+            values: self.values,
+        }
+    }
+
+    /// Returns a flattened vector with all the tensor values copied inside it
+    pub fn to_vec(self) -> Vec<T> {
+        self.values
     }
 }
 
@@ -382,41 +407,21 @@ impl<T: Default> Tensor<T> {
         G: Fn(Coord, usize) -> T,
     {
         match generator {
-            Some(f) => make_tensor(shape, f),
-            None => make_tensor(shape, |_, _| T::default()),
+            Some(f) => Self::make_tensor(shape, f),
+            None => Self::make_tensor(shape, |_, _| T::default()),
         }
     }
 }
 
 impl<T> Tensor<T>
 where
-    T: Copy + std::ops::Mul<Output = T>,
+    T: Num + Copy,
 {
     /// Scales up every item in this tensor by `scalar`
-    pub fn scale(&mut self, scalar: T) {
+    pub fn scalar_mul(&mut self, scalar: T) {
         for item in self.values.iter_mut() {
             *item = *item * scalar;
         }
-    }
-}
-
-impl<T> Tensor<T>
-where
-    T: Clone,
-{
-    /// Returns a flattened tensor with all the tensor values copied inside it.
-    /// This is equivalent to reshaping the tensor to a single dimension equal to the
-    /// multiplication of all the axis and cloning it
-    pub fn to_flat(&self) -> Tensor<T> {
-        Tensor {
-            shape: Shape::from(vec![self.shape.mul()]),
-            values: self.values.clone(),
-        }
-    }
-
-    /// Returns a flattened vector with all the tensor values copied inside it
-    pub fn to_vec(&self) -> Vec<T> {
-        self.values.clone()
     }
 }
 
@@ -428,15 +433,20 @@ where
     /// "1" is taken to be of the appropriate base type, which can be any type
     /// for which the `Num` trait is implemented
     pub fn ones(shape: Shape) -> Tensor<T> {
-        make_tensor(shape, |_, _| T::one())
+        Self::make_tensor(shape, |_, _| T::one())
     }
 
     /// Creates a tensor with a given shape and all values set to 0.
     /// "0" is taken to be of the appropriate base type, which can be any type
     /// for which the `Num` trait is implemented
     pub fn zeros(shape: Shape) -> Tensor<T> {
-        make_tensor(shape, |_, _| T::zero())
+        Self::make_tensor(shape, |_, _| T::zero())
     }
+
+    // Outer product between two tensors. Consumes self.
+    // pub fn tensor_product<Rhs, Y>(self, other: &Rhs) -> Tensor<T> where Rhs: TensorLike<Y>, Y: Num {
+    //     let output_shape = self.shape() * other.shape();
+    // }
 }
 
 impl<T> From<Vec<T>> for Tensor<T> {
@@ -471,21 +481,25 @@ impl<T: Clone> Clone for Tensor<T> {
     }
 }
 
-// Implements scalar multiplication
-impl<T: Copy + std::ops::Mul<Output = T>> Mul<T> for Tensor<T> {
+impl<Rhs, T> Mul<Rhs> for Tensor<T>
+where
+    Rhs: TensorLike<T>,
+    T: Copy + Num,
+{
     type Output = Tensor<T>;
 
-    fn mul(self, rhs: T) -> Self::Output {
+    fn mul(self, rhs: Rhs) -> Self::Output {
         let mut out_tensor: Tensor<T> = self.clone();
-        out_tensor.scale(rhs);
-
-        // out_tensor
-        for item in self.iter() {
-            out_tensor
-                .set(item.coords, (*item.value * rhs).into())
-                .unwrap();
+        if rhs.is_scalar() {
+            out_tensor.scalar_mul(*rhs.first().unwrap());
+        } else {
+            for item in self.iter() {
+                let coord = item.coords.clone();
+                out_tensor
+                    .set(item.coords, (*item.value * *rhs.at(coord).unwrap()).into())
+                    .unwrap();
+            }
         }
-
         out_tensor
     }
 }
@@ -527,30 +541,10 @@ where
     }
 }
 
-impl<T> Mul<Tensor<T>> for Tensor<T>
+impl<T> Display for Tensor<T>
 where
-    T: Clone + Mul<Output = T>,
+    T: Display + Copy,
 {
-    type Output = Tensor<T>;
-
-    fn mul(self, rhs: Tensor<T>) -> Self::Output {
-        assert_eq!(self.shape(), rhs.shape());
-        let mut new_tensor = self.clone();
-        self.iter().for_each(|component| {
-            let coord = component.coords.clone();
-            new_tensor
-                .set(
-                    component.coords,
-                    component.value.clone() * rhs.at_ref(&coord).unwrap().clone(),
-                )
-                .unwrap();
-        });
-
-        new_tensor
-    }
-}
-
-impl<T> Display for Tensor<T> where T: Display + Copy {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut last_res = Ok(());
         for component in self.iter() {
@@ -558,8 +552,6 @@ impl<T> Display for Tensor<T> where T: Display + Copy {
         }
 
         last_res
-
-        // write!(f, "{}", t_repr)
     }
 }
 
@@ -613,7 +605,9 @@ pub struct TensorComponent<'a, T> {
 impl<'a, T> TensorComponent<'a, T> {
     pub fn is_terminal(&self) -> bool {
         let higher_dims = self.tensor.shape.range(0, self.tensor.shape.len() - 1);
-        self.coords.range(0, self.coords.cardinality() - 1).eq(&higher_dims)
+        self.coords
+            .range(0, self.coords.cardinality() - 1)
+            .eq(&higher_dims)
     }
 }
 
@@ -744,8 +738,39 @@ impl<T> Drop for TensorIteratorMut<'_, T> {
     }
 }
 
+#[macro_export]
+/// Constructs a `Tensor`
+/// ```ignore
+/// tensor!((2, 2, 3) => [3, 3, 1, 2, 2, 2, 1, 1, 4, 5, 2, 4])
+/// ```
+macro_rules! tensor {
+    ( ( $( $dim:expr ),* ) => [ $( $x:expr ),* ] ) => {
+        {
+            let mut shape_dimensions = Vec::<usize>::new();
+            $(
+                shape_dimensions.push($dim);
+            )*
+            let shape = Shape::new(shape_dimensions);
+
+            let mut values = Vec::new();
+            $(
+                values.push($x);
+            )*
+
+            // assert_eq!(shape.cardinality(), values.len());
+
+            Tensor::from_vec_with_shape(
+                values,
+                shape
+            )
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
+    use crate::{tensor, coord};
+
     use super::*;
     #[test]
     fn new() {
@@ -847,5 +872,19 @@ mod test {
     fn display() {
         let t: Tensor<f64> = Tensor::zeros(shape!(4, 3, 2));
         println!("{}", t);
+    }
+
+    #[test]
+    fn from_vec() {
+        let tensor1 = Tensor::from_vec_with_shape(vec![1, 2, 3, 4], shape!(2, 2));
+        assert_eq!(tensor1.size(), 4);
+    }
+
+    #[test]
+    fn macros() {
+        let tensor1 = tensor!((1, 1, 2) => [ 0., 1. ]);
+        assert_eq!(tensor1.size(), 2);
+        assert_eq!(tensor1.at(coord!(0, 0, 0)), Some(&0.));
+        assert_eq!(tensor1.at(coord!(0, 0, 1)), Some(&1.));
     }
 }

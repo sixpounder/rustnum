@@ -1,4 +1,8 @@
-use std::{fmt::Display, ops::{Index, IndexMut}, slice::Iter, vec};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+    slice::Iter,
+};
 
 use crate::{Set, Shape};
 
@@ -12,9 +16,7 @@ impl Coord {
     /// Creates a new coordinate with `axis` as its components
     #[inline]
     pub fn new(axis: Vec<usize>) -> Self {
-        Self {
-            axis: axis,
-        }
+        Self { axis: axis }
     }
 
     /// Creates a new coordinate of `n_dimensions` component set to `0`
@@ -25,17 +27,13 @@ impl Coord {
             dimensions.push(0);
         }
 
-        Self {
-            axis: dimensions
-        }
+        Self { axis: dimensions }
     }
 
     #[inline]
     pub fn range(&self, start: usize, end: usize) -> Self {
         let dimensions = self.axis[start..end].to_vec();
-        Self {
-            axis: dimensions
-        }
+        Self { axis: dimensions }
     }
 
     /// Gets the value of the axis component at `idx` position.
@@ -78,12 +76,6 @@ impl Set for Coord {
     fn size(&self) -> usize {
         self.axis.len()
     }
-
-    fn empty() -> Self {
-        Self {
-            axis: vec![]
-        }
-    }
 }
 
 impl Index<usize> for Coord {
@@ -99,37 +91,18 @@ impl IndexMut<usize> for Coord {
     }
 }
 
-impl PartialEq for Coord {
-    fn eq(&self, other: &Self) -> bool {
-        let mut i = 0;
-        while i < self.axis.len() {
-            if other.axis[i] != self.axis[i] {
-                return false;
-            }
-            i += 1;
-        }
-
-        true
-    }
-}
-
-impl PartialEq<Shape> for Coord {
-    fn eq(&self, other: &Shape) -> bool {
-        let mut i: usize = 0;
-        for c in self.iter_axis() {
-            if other[i] != *c {
-                return false;
-            }
-            i += 1;
-        }
-
-        true
+impl<S> PartialEq<S> for Coord
+where
+    S: Set<Item = usize>,
+{
+    fn eq(&self, other: &S) -> bool {
+        self.as_set_slice() == other.as_set_slice()
     }
 }
 
 impl Display for Coord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string_list: Vec<String> = self.iter_axis().map(|axis| { axis.to_string() }).collect();
+        let string_list: Vec<String> = self.iter_axis().map(|axis| axis.to_string()).collect();
         write!(f, "({})", string_list.join(","))
     }
 }
@@ -157,7 +130,7 @@ impl<'a> CoordIterator<'a> {
             space,
             current: Coord::zeroes(space.len()),
             next: None,
-            started: false
+            started: false,
         }
     }
 
@@ -166,7 +139,7 @@ impl<'a> CoordIterator<'a> {
             space,
             current: Coord::zeroes(space.len()),
             next: None,
-            started: false
+            started: false,
         }
     }
 
@@ -186,7 +159,7 @@ impl<'a> CoordIterator<'a> {
                 if *coordinate < (self.space[i] - 1) {
                     // Can move on this axis
                     *coordinate = *coordinate + 1;
-    
+
                     // If the axis is NOT the last one, we must reset all contained axis
                     if i < shape_last_index {
                         let reset_rng = (i + 1)..=shape_last_index;
@@ -194,7 +167,7 @@ impl<'a> CoordIterator<'a> {
                             self.current[j] = 0;
                         }
                     }
-    
+
                     break;
                 } else {
                     if i == 0 {
@@ -208,7 +181,7 @@ impl<'a> CoordIterator<'a> {
                     }
                 }
             }
-    
+
             if end_of_shape {
                 self.next = None;
             } else {
@@ -231,12 +204,26 @@ impl<'a> Iterator for CoordIterator<'a> {
     }
 }
 
+#[macro_export]
+macro_rules! coord {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut dims = Vec::<usize>::new();
+            $(
+                dims.push($x);
+            )*
+            let o = Coord::new(dims);
+            o
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     #[test]
     fn base() {
-        use crate::{shape};
         use super::*;
+        use crate::shape;
 
         let s = shape!(3, 5, 3);
         let mut iter_one = s.iter().take(1);

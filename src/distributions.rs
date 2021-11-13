@@ -1,7 +1,7 @@
 use num_traits::{Float, FloatConst};
 use crate::TensorLike;
 use crate::ops::{BinomialTerm, Factorial};
-use crate::{generators::density, Coord, Shape, Tensor};
+use crate::{generators::density, Coord, Tensor, shape, Shape, coord};
 use std::ops::Range;
 use std::{ops::Add, vec::Vec};
 
