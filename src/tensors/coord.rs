@@ -6,7 +6,7 @@ use std::{
 
 use crate::{Set, Shape};
 
-/// Represents a generic coordinate
+/// Represents a generic coordinate for a given space
 #[derive(Clone, Debug)]
 pub struct Coord {
     axis: Vec<usize>,
@@ -17,6 +17,11 @@ impl Coord {
     #[inline]
     pub fn new(axis: Vec<usize>) -> Self {
         Self { axis: axis }
+    }
+
+    #[inline]
+    pub fn new_for_shape(space: Shape) -> Self {
+        Self::zeroes(space.size())
     }
 
     /// Creates a new coordinate of `n_dimensions` component set to `0`
@@ -49,6 +54,22 @@ impl Coord {
         self.axis.get_mut(idx)
     }
 
+    #[inline]
+    pub fn add_axis(&mut self) -> usize {
+        self.axis.push(0);
+        self.axis.len() - 1
+    }
+
+    #[inline]
+    pub fn remove_axis(&mut self, idx: usize) {
+        self.axis.remove(idx);
+    }
+
+    #[inline]
+    pub fn pop_axis(&mut self) -> Option<usize> {
+        self.axis.pop()
+    }
+
     /// An iterator over the coordinate components
     #[inline]
     pub fn iter_axis(&self) -> Iter<'_, usize> {
@@ -63,6 +84,11 @@ impl Coord {
             cardinality = cardinality * i;
         });
         cardinality
+    }
+
+    #[inline]
+    pub fn empty(&self) -> bool {
+        self.size() == 0
     }
 }
 
@@ -112,6 +138,7 @@ impl Display for Coord {
 pub struct CoordIterator<'a> {
     space: &'a Shape,
     current: Coord,
+    previous: Option<Coord>,
     next: Option<Coord>,
     started: bool,
 }
@@ -129,6 +156,7 @@ impl<'a> CoordIterator<'a> {
         Self {
             space,
             current: Coord::zeroes(space.len()),
+            previous: None,
             next: None,
             started: false,
         }
@@ -138,6 +166,7 @@ impl<'a> CoordIterator<'a> {
         Self {
             space,
             current: Coord::zeroes(space.len()),
+            previous: None,
             next: None,
             started: false,
         }
@@ -150,6 +179,7 @@ impl<'a> CoordIterator<'a> {
     pub fn step(&mut self) {
         if !self.started {
             self.started = true;
+            self.previous = None;
             self.next = Some(self.current.clone());
         } else {
             let mut end_of_shape = false;

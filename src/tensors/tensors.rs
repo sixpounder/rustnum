@@ -1,6 +1,7 @@
 use crate::{
+    coord,
     ops::{Dot, Stats},
-    Coord, CoordIterator, Shape, shape
+    shape, Coord, CoordIterator, Set, Shape,
 };
 use num_traits::{Float, Num};
 use std::{
@@ -345,6 +346,10 @@ impl<T> Tensor<T> {
         TensorIterator::new(self)
     }
 
+    pub fn enumerate(&self) -> TensorEnumerator<T> {
+        TensorEnumerator::new(self)
+    }
+
     /// Same as `iter`, but yelding mutable refs to tensor components
     pub fn iter_mut(&mut self) -> TensorIteratorMut<T> {
         TensorIteratorMut::new(self)
@@ -546,12 +551,61 @@ where
     T: Display + Copy,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut last_res = Ok(());
-        for component in self.iter() {
-            last_res = write!(f, "{}", component.value);
+        let mut o: String = String::new();
+        let mut last_emitted_symbol = "";
+        for e in self.enumerate() {
+            match e {
+                EnumerationPoint::AxisBegin => {
+                    o = o.add(
+                        format!(
+                            "{}[",
+                            match last_emitted_symbol {
+                                "]" => ", ",
+                                "[" => "",
+                                _ => "",
+                            }
+                        )
+                        .as_str(),
+                    );
+                    last_emitted_symbol = "[";
+                }
+                EnumerationPoint::AxisEnd => {
+                    o = o.add(
+                        format!(
+                            "{}]",
+                            match last_emitted_symbol {
+                                "t" => " ",
+                                _ => "",
+                            }
+                        )
+                        .as_str(),
+                    );
+                    last_emitted_symbol = "]";
+                }
+                EnumerationPoint::Terminal(component) => {
+                    o = o.add(
+                        format!(
+                            "{}{}",
+                            match last_emitted_symbol {
+                                "t" => ", ",
+                                "[" => " ",
+                                _ => "",
+                            },
+                            component.value,
+                            // match last_emitted_symbol {
+                            //     "t" => ", ",
+                            //     "[" => " ",
+                            //     _ => "",
+                            // }
+                        )
+                        .as_str(),
+                    );
+                    last_emitted_symbol = "t";
+                }
+            }
         }
 
-        last_res
+        write!(f, "{}", o.as_str())
     }
 }
 
@@ -566,7 +620,7 @@ impl<T: Float> Stats for Tensor<T> {
 
         match T::from(self.size()) {
             Some(v) => collector / v,
-            _ => panic!("Tensor len() shitted its pants"),
+            _ => panic!("Tensor size() shitted its pants"),
         }
     }
 
@@ -738,6 +792,112 @@ impl<T> Drop for TensorIteratorMut<'_, T> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum EnumerationPoint<'a, T> {
+    AxisBegin,
+    AxisEnd,
+    Terminal(TensorComponent<'a, T>),
+}
+
+pub struct TensorEnumerator<'a, T> {
+    tensor: &'a Tensor<T>,
+    current_coord: Option<Coord>,
+    start_flags: Vec<bool>,
+}
+
+impl<'a, T> TensorEnumerator<'a, T> {
+    pub fn new(source: &'a Tensor<T>) -> Self {
+        let mut start_flags = Vec::new();
+        let size: usize = match source.shape().size() {
+            0 => 1,
+            _ => source.shape().size(),
+        };
+
+        for _ in 0..size {
+            start_flags.push(false);
+        }
+
+        TensorEnumerator {
+            tensor: source,
+            current_coord: None,
+            start_flags,
+        }
+    }
+
+    fn step(&mut self) -> Option<EnumerationPoint<'a, T>> {
+        if let Some(current_coord) = self.current_coord.as_mut() {
+            if current_coord.empty() {
+                // If current coordinate is empty it means that the higher order axis has been popped,
+                // which means it has been walked and thus the iteration is over
+                None
+            } else {
+                // Otherwise, it means there are still coordinates to be walked
+                let space = self.tensor.shape();
+                let current_axis_index = current_coord.size() - 1;
+
+                // Check the start flags to know if this axis should increment or not
+                if !self.start_flags[current_axis_index] {
+                    // SCENARIO: this axis was added on previous iteration, set as started before evaluating it
+                    self.start_flags[current_axis_index] = true;
+                } else {
+                    // SCENARIO: axis index can be advanced (if possible)
+                    if current_coord[current_axis_index] < space[current_axis_index] - 1 {
+                        // Axis can be advanced
+                        current_coord[current_axis_index] += 1;
+                    } else {
+                        // Axis is done, pop it and reset the start flag to false
+                        current_coord.pop_axis();
+                        self.start_flags[current_axis_index] = false;
+                        return Some(EnumerationPoint::AxisEnd);
+                    }
+                }
+
+                if current_axis_index < space.size() - 1 {
+                    // SCENARIO: this is a non terminal axis, meaning **we must go deeper** and start
+                    // a new one
+                    current_coord.add_axis();
+                    Some(EnumerationPoint::AxisBegin)
+                } else {
+                    // SCENARIO: this is a terminal axis, meaning there is a value to return
+                    Some(EnumerationPoint::Terminal(TensorComponent {
+                        coords: current_coord.clone(),
+                        tensor: self.tensor,
+                        value: &self.tensor[current_coord.clone()],
+                    }))
+                }
+            }
+        } else {
+            // Iteration has not started yet
+
+            // If the tensor is scalar, handle it here
+            if self.tensor.is_scalar() {
+                if self.start_flags[0] {
+                    None
+                } else {
+                    self.start_flags[0] = true;
+                    Some(EnumerationPoint::Terminal(TensorComponent {
+                        coords: coord!(0),
+                        tensor: &self.tensor,
+                        value: self.tensor.first().unwrap(),
+                    }))
+                }
+            } else {
+                // Otherwise, se the start of the coordinate system and step once again
+                self.current_coord = Some(Coord::zeroes(1));
+                Some(EnumerationPoint::AxisBegin)
+            }
+        }
+    }
+}
+
+impl<'a, T> Iterator for TensorEnumerator<'a, T> {
+    type Item = EnumerationPoint<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.step()
+    }
+}
+
 #[macro_export]
 /// Constructs a `Tensor`
 /// ```ignore
@@ -757,7 +917,14 @@ macro_rules! tensor {
                 values.push($x);
             )*
 
-            // assert_eq!(shape.cardinality(), values.len());
+            if shape.cardinality() != values.len() {
+                panic!(
+                    "Trying to create a tensor with shape {} (cardinality {}) but {} values where provided",
+                    shape,
+                    shape.cardinality(),
+                    values.len()
+                );
+            }
 
             Tensor::from_vec_with_shape(
                 values,
@@ -769,7 +936,7 @@ macro_rules! tensor {
 
 #[cfg(test)]
 mod test {
-    use crate::{tensor, coord};
+    use crate::{coord, tensor};
 
     use super::*;
     #[test]
@@ -814,6 +981,60 @@ mod test {
     }
 
     #[test]
+    fn enumerate_scalar() {
+        let scalar = Tensor::scalar(1);
+        let mut iter = scalar.enumerate();
+        assert_eq!(
+            iter.next(),
+            Some(EnumerationPoint::Terminal(TensorComponent {
+                coords: coord!(0),
+                tensor: &scalar,
+                value: &1
+            }))
+        );
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn enumerate() {
+        let tensor_1 = tensor!((2, 3, 2) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        let mut iter = tensor_1.enumerate();
+        let mut c = iter.next().unwrap();
+        assert_eq!(c, EnumerationPoint::AxisBegin);
+
+        c = iter.next().unwrap();
+        assert_eq!(c, EnumerationPoint::AxisBegin);
+
+        c = iter.next().unwrap();
+        assert_eq!(c, EnumerationPoint::AxisBegin);
+
+        c = iter.next().unwrap();
+        assert_eq!(
+            c,
+            EnumerationPoint::Terminal(TensorComponent {
+                tensor: &tensor_1,
+                value: &0,
+                coords: coord!(0, 0, 0)
+            })
+        );
+
+        c = iter.next().unwrap();
+        assert_eq!(
+            c,
+            EnumerationPoint::Terminal(TensorComponent {
+                tensor: &tensor_1,
+                value: &1,
+                coords: coord!(0, 0, 1)
+            })
+        );
+
+        c = iter.next().unwrap();
+        assert_eq!(c, EnumerationPoint::AxisEnd);
+
+        // etc...
+    }
+
+    #[test]
     fn scalar_sum() {
         let generator = |coord: Coord, _| coord.cardinality() as f64;
         let mut t = Tensor::<f64>::new(shape!(2, 4, 3), generator);
@@ -853,7 +1074,7 @@ mod test {
     }
 
     #[test]
-    fn uninit_at_no_panic() {
+    fn uninit_tensor_no_panic() {
         let t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
         assert!(t.at(coord!(0, 1, 3)).is_some());
     }
@@ -881,10 +1102,35 @@ mod test {
     }
 
     #[test]
+    fn rescale() {
+        let mut tensor1 = tensor!((1, 3, 2) => [ 0., 1., 4., 3.2, 3.1, 9. ]);
+        assert_eq!(tensor1.shape(), shape!(1, 3, 2));
+
+        tensor1.reshape(shape!(2, 3, 1));
+        assert_eq!(tensor1.shape(), shape!(2, 3, 1));
+
+        tensor1.reshape(shape!(6, 1, 1));
+        assert_eq!(tensor1.shape(), shape!(6, 1, 1));
+
+        tensor1.reshape(shape!(6));
+        assert_eq!(tensor1.shape(), shape!(6));
+    }
+
+    #[test]
     fn macros() {
-        let tensor1 = tensor!((1, 1, 2) => [ 0., 1. ]);
-        assert_eq!(tensor1.size(), 2);
+        let tensor1 = tensor!((1, 3, 2) => [ 0., 1., 4., 3.2, 3.1, 9. ]);
+        assert_eq!(tensor1.size(), 6);
         assert_eq!(tensor1.at(coord!(0, 0, 0)), Some(&0.));
         assert_eq!(tensor1.at(coord!(0, 0, 1)), Some(&1.));
+        assert_eq!(tensor1.at(coord!(0, 1, 0)), Some(&4.));
+        assert_eq!(tensor1.at(coord!(0, 1, 1)), Some(&3.2));
+        assert_eq!(tensor1.at(coord!(0, 2, 0)), Some(&3.1));
+        assert_eq!(tensor1.at(coord!(0, 2, 1)), Some(&9.));
+    }
+
+    #[test]
+    #[should_panic]
+    fn macros_panic() {
+        let _tensor1 = tensor!((1, 3, 2) => [ 0., 1., 4. ]);
     }
 }
