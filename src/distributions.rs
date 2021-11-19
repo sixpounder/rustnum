@@ -53,14 +53,7 @@ where
         r = r + step;
     }
 
-    let d_size = shape!(range_vec.len());
-
-    let distribution: Tensor<T> = Tensor::new(
-        d_size,
-        move |_: Coord, i: usize| -> T { range_vec[i] },
-    );
-
-    distribution
+    Tensor::from(range_vec)
 }
 
 /// The Poisson distribution is the discrete probability distribution of the number of events

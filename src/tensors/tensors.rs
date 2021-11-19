@@ -28,6 +28,9 @@ pub enum TensorError {
 
     /// Some thread-related error
     Thread,
+
+    /// Usually given when an operation implies incompatibility between two tensor shapes
+    IncompatibleShape,
 }
 
 impl<T> From<std::result::Result<T, Box<dyn Any + Send + 'static>>> for TensorError {
@@ -329,6 +332,33 @@ impl<T> Tensor<T> {
         }
     }
 
+    /// Returns an iterator on this tensor. Unlike `iter` and `iter_mut` the iterator yields items of type `EnumerationPoint`,
+    /// which indicates any *event* occurring during iteration including the beginning and ending of each axis.
+    /// The iteration order is defined by its shape, meaning it will iter by axis
+    /// priority. For example, a tensor like this:
+    /// ```ignore
+    /// # use crate::tensor;
+    /// let t1 = tensor!((2, 2, 3), [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
+    /// ```
+    /// will yield something like:
+    /// * `EnumerationPoint::AxisBegin`
+    /// * `EnumerationPoint::AxisBegin`
+    /// * `EnumerationPoint::AxisBegin`
+    /// * `EnumerationPoint::Terminal` for coords (0, 0, 0)
+    /// * `EnumerationPoint::Terminal` for coords (0, 0, 1)
+    /// * `EnumerationPoint::Terminal` for coords (0, 0, 2)
+    /// * `EnumerationPoint::AxisEnd`
+    /// * `EnumerationPoint::AxisBegin`
+    /// * `EnumerationPoint::Terminal` for coords (0, 1, 0)
+    /// * `EnumerationPoint::Terminal` for coords (0, 1, 1)
+    /// * `EnumerationPoint::Terminal` for coords (0, 1, 2)
+    /// * `EnumerationPoint::AxisEnd`
+    /// * ... and so on
+    ///
+    pub fn enumerate(&self) -> TensorEnumerator<T> {
+        TensorEnumerator::new(self)
+    }
+
     /// Returns an iterator over this tensor. The iteration order is defined by its shape, meaning it will iter by axis
     /// priority. For example, a tensor like this:
     /// ```ignore
@@ -344,10 +374,6 @@ impl<T> Tensor<T> {
     /// * ...
     pub fn iter(&self) -> TensorIterator<T> {
         TensorIterator::new(self)
-    }
-
-    pub fn enumerate(&self) -> TensorEnumerator<T> {
-        TensorEnumerator::new(self)
     }
 
     /// Same as `iter`, but yelding mutable refs to tensor components
@@ -391,7 +417,8 @@ impl<T: Copy> Tensor<T> {
 }
 
 impl<T: Default> Tensor<T> {
-    /// Creates a new tensor with a value generator
+    /// Creates a new tensor with an optional value generator. If `None` is given then
+    /// all tensor values will be `T::default()`
     /// # Example
     /// ```
     /// # use rustnum::{Tensor, shape, Shape, Coord, TensorLike};
@@ -422,7 +449,7 @@ impl<T> Tensor<T>
 where
     T: Num + Copy,
 {
-    /// Scales up every item in this tensor by `scalar`
+    /// Scales up every item in this tensor by `scalar`, if `scalar` is a `Num`
     pub fn scalar_mul(&mut self, scalar: T) {
         for item in self.values.iter_mut() {
             *item = *item * scalar;

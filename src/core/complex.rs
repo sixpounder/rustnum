@@ -582,6 +582,13 @@ impl<T: Num + Neg<Output = T>> Neg for Complex<T> {
 
 // #endregion
 
+#[macro_export]
+macro_rules! complex {
+    ($r:expr, $i:expr) => {
+        Complex::new($r, $i)
+    };
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -685,5 +692,12 @@ mod test {
                 panic!("Could not test complex display trait impl (you broke the test)");
             }
         }
+    }
+
+    #[test]
+    fn macros() {
+        let c = complex!(5.0, 3.0);
+        assert_eq!(c.real(), 5.0);
+        assert_eq!(c.immaginary(), 3.0);
     }
 }

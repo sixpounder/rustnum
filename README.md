@@ -23,6 +23,9 @@ let mut tensor: Tensor<f64> = Tensor::new(
     Some(generator)
 );
 
+// Or, more simply:
+let mut tensor = tensor!((2, 2, 1) => [3, 4, 2, 1])
+
 // Get values
 tensor.at(coord!(0, 0, 1));
 // or
@@ -44,6 +47,8 @@ assert_eq!(c1.conjugate(), Complex::new(12.0, -5.0));
 ```
 
 ## Distributions
+
+### Examples
 
 Generate a normal probability distribution:
 

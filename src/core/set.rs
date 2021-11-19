@@ -1,5 +1,6 @@
 use std::ops::Index;
 
+/// A set slice is a concrete type representing a subset of a `Set`
 #[derive(Clone)]
 pub struct SetSlice<'a, T> {
     head: *const T,
@@ -16,6 +17,7 @@ impl<'a, T> SetSlice<'a, T> {
         }
     }
 
+    /// Gets the item at `index` position in this slice
     pub fn at(&self, index: usize) -> Option<&'a T> {
         if index < self.n {
             unsafe { Some(&*self.head.add(index)) }
@@ -24,12 +26,14 @@ impl<'a, T> SetSlice<'a, T> {
         }
     }
 
+    /// Same as `at` but panics on `None` values
     pub fn at_unchecked(&self, index: usize) -> &'a T {
         self.at(index).unwrap()
     }
 }
 
 impl<T> SetSlice<'_, T> {
+    /// The number of items in this slice
     pub fn size(&self) -> usize {
         self.n
     }
@@ -84,6 +88,7 @@ impl<'a, T> Iterator for SetIntoIterator<'a, T> {
     }
 }
 
+/// A trait for any object representing an indexable group of elements
 pub trait Set {
     type Item;
 
@@ -103,10 +108,12 @@ pub trait Set {
         SetSlice::new(self.at_unchecked(0), start, end)
     }
 
+    /// A slice representing the whole set
     fn as_set_slice(&self) -> SetSlice<'_, Self::Item> {
         SetSlice::new(self.at_unchecked(0), 0, self.size())
     }
 
+    /// Iterates the set (as a set slice)
     fn enumerate(&self) -> SetIntoIterator<Self::Item> {
         self.as_set_slice().into_iter()
     }
