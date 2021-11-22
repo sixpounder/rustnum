@@ -16,6 +16,7 @@ mod core;
 pub mod distributions;
 pub mod linalg;
 pub mod ops;
+pub mod activations;
 
 pub use self::core::*;
 pub use tensors::*;

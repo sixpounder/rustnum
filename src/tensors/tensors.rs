@@ -338,7 +338,7 @@ impl<T> Tensor<T> {
     /// priority. For example, a tensor like this:
     /// ```ignore
     /// # use crate::tensor;
-    /// let t1 = tensor!((2, 2, 3), [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
+    /// let t1 = tensor!((2, 2, 3) => [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
     /// ```
     /// will yield something like:
     /// * `EnumerationPoint::AxisBegin`
@@ -363,7 +363,7 @@ impl<T> Tensor<T> {
     /// priority. For example, a tensor like this:
     /// ```ignore
     /// # use crate::tensor;
-    /// let t1 = tensor!((2, 2, 3), [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
+    /// let t1 = tensor!((2, 2, 3) => [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
     /// ```
     /// will be iterated like this order in coordinates:
     /// * (0, 0, 0)

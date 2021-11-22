@@ -1,7 +1,7 @@
-use num_traits::{Float, FloatConst};
-use crate::TensorLike;
 use crate::ops::{BinomialTerm, Factorial};
-use crate::{generators::density, Coord, Tensor, shape, Shape, coord};
+use crate::{activations, TensorLike};
+use crate::{coord, generators::density, shape, Coord, Shape, Tensor};
+use num_traits::{Float, FloatConst};
 use std::ops::Range;
 use std::{ops::Add, vec::Vec};
 
@@ -59,18 +59,18 @@ where
 /// The Poisson distribution is the discrete probability distribution of the number of events
 /// occurring in a given time period, given the average number of times the event occurs over
 /// that time period.
-/// 
+///
 /// The returned value is a Tensor with a flat shape
 ///
 /// # Conditions of use
 /// Conditions for Poisson Distribution:
 /// * An event can occur any number of times during a time period.
-/// * Events occur independently. In other words, if an event occurs, it does not affect 
+/// * Events occur independently. In other words, if an event occurs, it does not affect
 ///   the probability of another event occurring in the same time period.
 /// * The rate of occurrence is constant; that is, the rate does not change based on time.
 /// * The probability of an event occurring is proportional to the length of the time period.
-///   For example, it should be twice as likely for an event to occur in a 2 hour time 
-///   period than it is for an event to occur in a 1 hour period. 
+///   For example, it should be twice as likely for an event to occur in a 2 hour time
+///   period than it is for an event to occur in a 1 hour period.
 ///
 /// # Example
 /// ```
@@ -86,8 +86,7 @@ where
 /// assert_eq!(dist[coord!(4)], 0.13360188578108528);
 /// ```
 ///
-pub fn poisson(range: Range<i32>, step: i32, expected: f64) -> Tensor<f64>
-{
+pub fn poisson(range: Range<i32>, step: i32, expected: f64) -> Tensor<f64> {
     let d_size = range.end - range.start;
 
     let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(d_size as usize));
@@ -154,7 +153,9 @@ pub fn binomial(range: Range<u32>, n: u64, p: f64) -> Tensor<f64> {
     let mut k = range.start;
     let mut i = 0;
     while k < range.end {
-        distribution.set(coord!(i), binomial_core(n, k as u64, p)).unwrap();
+        distribution
+            .set(coord!(i), binomial_core(n, k as u64, p))
+            .unwrap();
         i += 1;
         k += 1;
     }
@@ -189,6 +190,60 @@ pub fn geometric(range: Range<u64>, p: f64) -> Tensor<f64> {
         distribution.set(coord!(i), geometric_core(p, k)).unwrap();
         i += 1;
         k += 1;
+    }
+
+    distribution
+}
+
+/// Rectified Linear Unit distribution with `n_elements` values evenly spaced in `range`
+pub fn relu(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
+    let step = (range.end - range.start) / n_elements as f64;
+    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(n_elements));
+    let mut i = 0;
+    let mut last_x = range.start;
+    while i < n_elements {
+        let value = last_x + step;
+        distribution
+            .set(coord!(i), activations::relu(value))
+            .expect("Cannot evaluate relu on passed value");
+        i += 1;
+        last_x = value;
+    }
+
+    distribution
+}
+
+/// Leaky Rectified Linear Unit distribution with `n_elements` values evenly spaced in `range`
+pub fn leaky_relu(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
+    let step = (range.end - range.start) / n_elements as f64;
+    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(n_elements));
+    let mut i = 0;
+    let mut last_x = range.start;
+    while i < n_elements {
+        let value = last_x + step;
+        distribution
+            .set(coord!(i), activations::leaky_relu(value))
+            .expect("Cannot evaluate leaky_relu on passed value");
+        i += 1;
+        last_x = value;
+    }
+
+    distribution
+}
+
+/// Sigmoid distribution with `n_elements` values evenly spaced in `range`
+pub fn sigmoid(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
+    let step = (range.end - range.start) / n_elements as f64;
+    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(n_elements));
+    let mut i = 0;
+    let mut last_x = range.start;
+    while i < n_elements {
+        let value = last_x + step;
+        distribution
+            .set(coord!(i), activations::sigmoid(value))
+            .expect("Cannot evaluate sigmoid on passed value");
+        i += 1;
+        last_x = value;
     }
 
     distribution
@@ -256,5 +311,19 @@ mod test {
         assert_eq!(dist[coord!(1)], 0.25);
         assert_eq!(dist[coord!(2)], 0.125);
         assert_eq!(dist[coord!(3)], 0.0625);
+    }
+
+    #[test]
+    fn relu_distribution() {
+        let dist = relu(-10.0..10.0, 200);
+        assert!(dist.iter().take(100).all(|c| c.value == &0.0));
+        assert!(dist.iter().skip(101).take(100).all(|c| c.value > &0.0));
+    }
+
+    #[test]
+    fn leaky_relu_distribution() {
+        let dist = leaky_relu(-10.0..10.0, 200);
+        assert!(dist.iter().take(100).all(|c| c.value < &0.0));
+        assert!(dist.iter().skip(101).take(100).all(|c| c.value > &0.0));
     }
 }
