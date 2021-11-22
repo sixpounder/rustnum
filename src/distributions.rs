@@ -1,7 +1,7 @@
 use crate::ops::{BinomialTerm, Factorial};
 use crate::{activations, TensorLike};
 use crate::{coord, generators::density, shape, Coord, Shape, Tensor};
-use num_traits::{Float, FloatConst};
+use num_traits::{Float, FloatConst, NumCast};
 use std::ops::Range;
 use std::{ops::Add, vec::Vec};
 
@@ -196,15 +196,15 @@ pub fn geometric(range: Range<u64>, p: f64) -> Tensor<f64> {
 }
 
 /// Rectified Linear Unit distribution with `n_elements` values evenly spaced in `range`
-pub fn relu(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
-    let step = (range.end - range.start) / n_elements as f64;
-    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(n_elements));
+pub fn relu<N: Float + FloatConst>(range: Range<N>, n_elements: usize) -> Tensor<N> {
+    let step = (range.end - range.start) / NumCast::from(n_elements).unwrap();
+    let mut distribution: Tensor<N> = Tensor::new_uninit(shape!(n_elements));
     let mut i = 0;
     let mut last_x = range.start;
     while i < n_elements {
         let value = last_x + step;
         distribution
-            .set(coord!(i), activations::relu(value))
+            .set(coord!(i), activations::relu(NumCast::from(value).unwrap()))
             .expect("Cannot evaluate relu on passed value");
         i += 1;
         last_x = value;
@@ -214,15 +214,15 @@ pub fn relu(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
 }
 
 /// Leaky Rectified Linear Unit distribution with `n_elements` values evenly spaced in `range`
-pub fn leaky_relu(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
-    let step = (range.end - range.start) / n_elements as f64;
-    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(n_elements));
+pub fn leaky_relu<N: Float + FloatConst>(range: Range<N>, n_elements: usize) -> Tensor<N> {
+    let step = (range.end - range.start) / NumCast::from(n_elements).unwrap();
+    let mut distribution: Tensor<N> = Tensor::new_uninit(shape!(n_elements));
     let mut i = 0;
     let mut last_x = range.start;
     while i < n_elements {
         let value = last_x + step;
         distribution
-            .set(coord!(i), activations::leaky_relu(value))
+            .set(coord!(i), activations::leaky_relu(NumCast::from(value).unwrap()))
             .expect("Cannot evaluate leaky_relu on passed value");
         i += 1;
         last_x = value;
@@ -232,15 +232,15 @@ pub fn leaky_relu(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
 }
 
 /// Sigmoid distribution with `n_elements` values evenly spaced in `range`
-pub fn sigmoid(range: Range<f64>, n_elements: usize) -> Tensor<f64> {
-    let step = (range.end - range.start) / n_elements as f64;
-    let mut distribution: Tensor<f64> = Tensor::new_uninit(shape!(n_elements));
+pub fn sigmoid<N: Float + FloatConst>(range: Range<N>, n_elements: usize) -> Tensor<N> {
+    let step = (range.end - range.start) / NumCast::from(n_elements).unwrap();
+    let mut distribution: Tensor<N> = Tensor::new_uninit(shape!(n_elements));
     let mut i = 0;
     let mut last_x = range.start;
     while i < n_elements {
         let value = last_x + step;
         distribution
-            .set(coord!(i), activations::sigmoid(value))
+            .set(coord!(i), activations::sigmoid(NumCast::from(value).unwrap()))
             .expect("Cannot evaluate sigmoid on passed value");
         i += 1;
         last_x = value;

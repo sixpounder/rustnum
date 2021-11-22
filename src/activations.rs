@@ -8,21 +8,21 @@ pub fn max<N>(x: N, y: N) -> N where N: Num + PartialOrd {
 
 /// Rectified Linear Unit function
 /// 
-/// Formula: `max(0, x)`
+/// Formula: `y = max(0, x)`
 pub fn relu<N>(x: N) -> N where N: Float {
     max(N::zero(), x)
 }
 
 /// Leaky Rectified Linear Unit function
 /// 
-/// Formula: `max(0,01 * x, x)`
+/// Formula: `y = max(0,01 * x, x)`
 pub fn leaky_relu<N>(x: N) -> N where N: Float {
     max(N::from(0.01).unwrap() * x, x)
 }
 
 /// Sigmoid function
 /// 
-/// Formula: 1 / 1 + e^(-x)
+/// Formula: y = 1 / 1 + e^(-x)
 pub fn sigmoid<N>(x: N) -> N where N: Float + FloatConst {
     let e: N = num_traits::float::FloatConst::E();
     N::one() / (N::one() + e.powf(-x))
