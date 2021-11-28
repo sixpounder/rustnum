@@ -1,9 +1,8 @@
 use crate::{CoordIterator, Set};
-use std::ops::Mul;
 use std::slice::Iter;
 use std::{
     fmt::Display,
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut, Mul},
 };
 
 pub trait Shapeable {
@@ -277,7 +276,7 @@ impl Mul<Shape> for Shape {
 
         Shape {
             dimensions: dims,
-            scale_factors
+            scale_factors,
         }
     }
 }

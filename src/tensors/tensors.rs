@@ -6,6 +6,7 @@ use crate::{
 use num_traits::{Float, Num};
 use std::{
     any::Any,
+    cmp::Ordering,
     fmt::{Display, Formatter},
     ops::{Add, Index, IndexMut, Mul},
 };
@@ -141,7 +142,7 @@ impl<T> TensorLike<T> for Vec<T> {
 /// // or
 /// tensor.set(coord!(0, 1, 2), 0.5);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Tensor<T> {
     values: Vec<T>,
     shape: Shape,
@@ -474,11 +475,6 @@ where
     pub fn zeros(shape: Shape) -> Tensor<T> {
         Self::make_tensor(shape, |_, _| T::zero())
     }
-
-    // Outer product between two tensors. Consumes self.
-    // pub fn tensor_product<Rhs, Y>(self, other: &Rhs) -> Tensor<T> where Rhs: TensorLike<Y>, Y: Num {
-    //     let output_shape = self.shape() * other.shape();
-    // }
 }
 
 impl<T> From<Vec<T>> for Tensor<T> {
@@ -619,11 +615,6 @@ where
                                 _ => "",
                             },
                             component.value,
-                            // match last_emitted_symbol {
-                            //     "t" => ", ",
-                            //     "[" => " ",
-                            //     _ => "",
-                            // }
                         )
                         .as_str(),
                     );
@@ -711,9 +702,9 @@ impl<T: PartialEq + Ord> Ord for TensorComponent<'_, T> {
         if *self.value < *other.value {
             std::cmp::Ordering::Less
         } else if *self.value > *other.value {
-            std::cmp::Ordering::Greater
+            Ordering::Greater
         } else {
-            std::cmp::Ordering::Equal
+            Ordering::Equal
         }
     }
 }
@@ -1141,6 +1132,12 @@ mod test {
 
         tensor1.reshape(shape!(6));
         assert_eq!(tensor1.shape(), shape!(6));
+    }
+
+    #[test]
+    fn cast() {
+        let tensor1 = tensor!((1, 3, 2) => [ false, true, true, true, false, true ]);
+        assert_eq!(tensor1.cast::<u8>(), tensor!((1, 3, 2) => [ 0, 1, 1, 1, 0, 1 ]))
     }
 
     #[test]

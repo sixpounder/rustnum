@@ -204,7 +204,10 @@ pub fn relu<N: Float + FloatConst>(range: Range<N>, n_elements: usize) -> Tensor
     while i < n_elements {
         let value = last_x + step;
         distribution
-            .set(coord!(i), activations::relu(NumCast::from(value).unwrap()))
+            .set(
+                coord!(i),
+                activations::relu(NumCast::from(value).expect("Cannot cast value to correct type")),
+            )
             .expect("Cannot evaluate relu on passed value");
         i += 1;
         last_x = value;
@@ -222,7 +225,12 @@ pub fn leaky_relu<N: Float + FloatConst>(range: Range<N>, n_elements: usize) -> 
     while i < n_elements {
         let value = last_x + step;
         distribution
-            .set(coord!(i), activations::leaky_relu(NumCast::from(value).unwrap()))
+            .set(
+                coord!(i),
+                activations::leaky_relu(
+                    NumCast::from(value).expect("Cannot cast value to correct type"),
+                ),
+            )
             .expect("Cannot evaluate leaky_relu on passed value");
         i += 1;
         last_x = value;
@@ -240,7 +248,12 @@ pub fn sigmoid<N: Float + FloatConst>(range: Range<N>, n_elements: usize) -> Ten
     while i < n_elements {
         let value = last_x + step;
         distribution
-            .set(coord!(i), activations::sigmoid(NumCast::from(value).unwrap()))
+            .set(
+                coord!(i),
+                activations::sigmoid(
+                    NumCast::from(value).expect("Cannot cast value to correct type"),
+                ),
+            )
             .expect("Cannot evaluate sigmoid on passed value");
         i += 1;
         last_x = value;

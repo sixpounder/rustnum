@@ -1,6 +1,6 @@
 use num_traits::{Float, FloatConst};
 
-pub fn density<'a, T: 'a + Float + FloatConst>(x: T, mean: T, scale: T) -> T {
+pub fn density<T:Float + FloatConst>(x: T, mean: T, scale: T) -> T {
     let one = T::one();
     let two = one + one;
     let p1: T = T::one() / (two * FloatConst::PI() * scale.powf(two)).sqrt();

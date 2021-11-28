@@ -13,7 +13,10 @@ pub trait Dot<T> {
     fn dot(&self, rhs: T) -> Self::Output;
 }
 
-impl<T> Dot<Vec<T>> for Vec<T> where T: Num + Copy {
+impl<T> Dot<Vec<T>> for Vec<T>
+where
+    T: Num + Copy,
+{
     type Output = T;
 
     fn dot(&self, rhs: Vec<T>) -> Self::Output {
@@ -48,126 +51,25 @@ pub trait Factorial {
     fn factorial(&self) -> Self;
 }
 
-impl Factorial for u8 {
-    fn factorial(&self) -> Self {
-        if *self == 0 {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
+macro_rules! impl_factorial {
+    ( $( $t:ty ),* ) => {
+        $(
+            impl Factorial for $t {
+                fn factorial(&self) -> Self {
+                    if self.is_zero() {
+                        1
+                    } else {
+                        let mut acc: Self = 1;
+                        for i in 2..=*self {
+                            acc = acc * i;
+                        }
 
-            acc
-        }
-    }
+                        acc
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl Factorial for u16 {
-    fn factorial(&self) -> Self {
-        if *self == 0 {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
-
-impl Factorial for u32 {
-    fn factorial(&self) -> Self {
-        if self.is_zero() {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
-
-impl Factorial for u64 {
-    fn factorial(&self) -> Self {
-        if *self == 0 {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
-
-impl Factorial for i8 {
-    fn factorial(&self) -> Self {
-        assert!(*self >= 0);
-        if *self == 0 {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
-
-impl Factorial for i16 {
-    fn factorial(&self) -> Self {
-        assert!(*self >= 0);
-        if *self == 0 {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
-
-impl Factorial for i32 {
-    fn factorial(&self) -> Self {
-        assert!(*self >= 0);
-        if self.is_zero() {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
-
-impl Factorial for i64 {
-    fn factorial(&self) -> Self {
-        assert!(*self >= 0);
-        if *self == 0 {
-            1
-        } else {
-            let mut acc: Self = 1;
-            for i in 2..=*self {
-                acc = acc * i;
-            }
-
-            acc
-        }
-    }
-}
+impl_factorial!(u8, u16, u32, u64, i8, i16, i32, i64);
