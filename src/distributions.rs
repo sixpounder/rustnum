@@ -74,10 +74,9 @@ where
 ///
 /// # Example
 /// ```
-/// # use rustnum::distributions::poisson;
-/// # use rustnum::distributions::arange;
 /// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
-/// let dist = poisson(0..5, 1, 2.5);
+/// use rustnum::distributions;
+/// let dist = distributions::poisson(0..5, 1, 2.5);
 /// assert_eq!(dist.size(), 5);
 /// assert_eq!(dist[coord!(0)], 0.0820849986238988);
 /// assert_eq!(dist[coord!(1)], 0.205212496559747);
@@ -285,6 +284,13 @@ mod test {
     fn normal_distribution() {
         let dist: Tensor<f64> = normal(-5.0..4.9, 0.1, 0.0, 0.2);
         assert_eq!(dist.size(), 100);
+    }
+
+    #[test]
+    fn large_normal_distribution() {
+        let rng = -100000.0..100000.0;
+        let dist: Tensor<f64> = normal(rng, 1., 0.0, 0.2);
+        assert_eq!(dist.size(), 200000);
     }
 
     #[test]

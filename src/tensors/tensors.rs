@@ -817,6 +817,7 @@ pub enum EnumerationPoint<'a, T> {
     Terminal(TensorComponent<'a, T>),
 }
 
+/// A struct returned from the `enumerate` method of a tensor. This implements the `Iterator` trait
 pub struct TensorEnumerator<'a, T> {
     tensor: &'a Tensor<T>,
     current_coord: Option<Coord>,
