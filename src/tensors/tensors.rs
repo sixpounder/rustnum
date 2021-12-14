@@ -363,7 +363,6 @@ impl<T> Tensor<T> {
     /// Returns an iterator over this tensor. The iteration order is defined by its shape, meaning it will iter by axis
     /// priority. For example, a tensor like this:
     /// ```ignore
-    /// # use crate::tensor;
     /// let t1 = tensor!((2, 2, 3) => [12, 23, 32, 0, 2, 23, 12, 23, 32, 0, 2, 23]);
     /// ```
     /// will be iterated like this order in coordinates:
@@ -956,10 +955,25 @@ impl<'a, T> Iterator for TensorEnumerator<'a, T> {
 /// 
 /// ## Example
 /// The following code yields a tensor of shape (2, 2, 3) with the given values inside of it
+/// 
 /// ```ignore
 /// tensor!((2, 2, 3) => [3, 3, 1, 2, 2, 2, 1, 1, 4, 5, 2, 4]);
 /// ```
+/// 
+/// Scalar tensors can be constructed with the simplified form
+/// 
+/// ```ignore
+/// tensor!(2)
+/// ```
+/// 
+/// ## Panics
+/// 
+/// The macro will panic if the cardinality of the shape doesn't match the number of values
+/// given as input - the ones to the right of `=>`
 macro_rules! tensor {
+    ( $value:expr ) => {
+        Tensor::scalar($value)
+    };
     ( ( $( $dim:expr ),* ) => [ $( $x:expr ),* ] ) => {
         {
             let mut shape_dimensions = Vec::<usize>::new();
@@ -1188,6 +1202,10 @@ mod test {
         assert_eq!(tensor1.at(coord!(0, 1, 1)), Some(&3.2));
         assert_eq!(tensor1.at(coord!(0, 2, 0)), Some(&3.1));
         assert_eq!(tensor1.at(coord!(0, 2, 1)), Some(&9.));
+
+        let scalar = tensor!(2);
+        assert!(scalar.is_scalar());
+        assert_eq!(scalar[coord!()], 2);
     }
 
     #[test]

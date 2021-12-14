@@ -236,6 +236,9 @@ impl<'a> Iterator for CoordIterator<'a> {
 
 #[macro_export]
 macro_rules! coord {
+    () => {
+        Coord::new(vec![])
+    };
     ( $( $x:expr ),* ) => {
         {
             let mut dims = Vec::<usize>::new();
