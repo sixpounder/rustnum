@@ -1,4 +1,6 @@
-use crate::{CoordIterator, Set};
+use rand::Rng;
+
+use crate::{CoordIterator, Set, Coord};
 use std::slice::Iter;
 use std::{
     fmt::Display,
@@ -88,6 +90,10 @@ impl Shape {
         self.len() == 0
     }
 
+    pub fn axis_scale_factor(&self, axis: usize) -> Option<&usize> {
+        self.scale_factors.get(axis)
+    }
+
     /// The number of dimension of this shape
     #[inline]
     pub fn ndim(&self) -> usize {
@@ -102,6 +108,18 @@ impl Shape {
             dimensions,
             scale_factors,
         }
+    }
+
+    /// Gets a random coord inside this shape
+    #[inline]
+    pub fn random_coord(&self) -> Coord {
+        let mut coord = Coord::zeroes(self.ndim());
+        let mut rng = rand::thread_rng();
+        for dim in 0..self.ndim() {
+            coord[dim] = rng.gen_range(0,self.dimensions[dim]);
+        }
+
+        coord
     }
 
     /// Returns the first dimension of this shape
@@ -150,12 +168,11 @@ impl Shape {
         }
     }
 
+    /// Prepends an axis to this shape
     #[inline]
-    pub fn replace_last(&self, value: usize) -> Shape {
-        let mut t = self.tail();
-        t.dimensions.push(value);
-
-        t
+    pub fn prepend(&mut self, value: usize) {
+        self.dimensions.insert(value, 0);
+        self.scale_factors = compute_scale_factors(&self.dimensions);
     }
 
     /// Appends an axis to this shape
@@ -359,5 +376,16 @@ mod test {
         let shape_2 = shape!(1, 2, 3);
 
         assert!(shape_1 != shape_2)
+    }
+
+    #[test]
+    fn rand_coord() {
+        let shape1 = shape!(3, 4, 5);
+        for _ in 0..100 {
+            let rand_coord = shape1.random_coord();
+            assert!(rand_coord[0] < 3);
+            assert!(rand_coord[1] < 4);
+            assert!(rand_coord[2] < 5);
+        }
     }
 }

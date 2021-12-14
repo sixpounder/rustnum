@@ -20,3 +20,5 @@ pub mod activations;
 
 pub use self::core::*;
 pub use tensors::*;
+
+pub use num_traits::*;

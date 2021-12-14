@@ -1,8 +1,8 @@
 use num_traits::{Float, FloatConst};
 
 pub fn density<T:Float + FloatConst>(x: T, mean: T, scale: T) -> T {
-    let one = T::one();
-    let two = one + one;
+    let one: T = T::one();
+    let two: T = one + one;
     let p1: T = T::one() / (two * FloatConst::PI() * scale.powf(two)).sqrt();
     let p2: T = (((x - mean).powf(two)) / (two * scale.powf(two))) * one.neg();
     let p2_exp = p2.exp();

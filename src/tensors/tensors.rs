@@ -382,6 +382,23 @@ impl<T> Tensor<T> {
         TensorIteratorMut::new(self)
     }
 
+    // /// Returns an iterator over a specific axis of this tensor. For example, if you have a matrix...
+    // /// ```ignore
+    // /// let mat1 = tensor!((5, 5) => [1, 2, 3, 4, 5, 6, 7, 8, 9 ..., 21, 22, 24, 24, 25])
+    // /// ```
+    // /// 
+    // /// ... and you want to iter by columns instead of rows:
+    // /// 
+    // /// ```ignore
+    // /// mat1.iter_axis(1)
+    // /// ```
+    // /// 
+    // /// will yield: 1, 6, 11, 16, 21, 2, 7 and so on
+    // pub fn iter_axis(&self, axis: usize) -> TensorAxisIterator<T> {
+    //     // self.iter().step_by(*self.shape().axis_scale_factor(axis).unwrap_or(&0))
+    //     todo!()
+    // }
+
     /// Reshapes this tensor into a different shape. The new shape must be coherent
     /// with the number of values contained by the current one.
     pub fn reshape(&mut self, t_shape: Shape) {
@@ -763,7 +780,7 @@ pub struct TensorComponentMut<'a, T> {
 }
 
 /// Same as `TensorIterator`, but mutable.
-pub struct TensorIteratorMut<'a, T> {
+pub struct TensorIteratorMut<'a, T: 'a> {
     tensor: *mut Tensor<T>,
     coord_iter: CoordIterator<'a>,
 }
@@ -778,6 +795,16 @@ impl<'a, T> TensorIteratorMut<'a, T> {
             coord_iter,
         }
     }
+
+    /// Resets the iterator, rewinding it to its initial position
+    pub fn reset(&mut self) {
+        let t_shape;
+        unsafe {
+            t_shape = (&*self.tensor).shape_ref();
+        }
+        let coord_iter = CoordIterator::new(t_shape);
+        self.coord_iter = coord_iter;
+    }
 }
 
 impl<'a, T: 'a> Iterator for TensorIteratorMut<'a, T> {
@@ -785,16 +812,23 @@ impl<'a, T: 'a> Iterator for TensorIteratorMut<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.coord_iter.next() {
-            Some(item) => unsafe {
+            Some(item) => {
                 let tensor_ptr: *mut Tensor<T> = self.tensor;
                 if tensor_ptr.is_null() {
                     None
                 } else {
-                    let value = (*tensor_ptr).at_ref_mut(&item).unwrap();
-                    Some(TensorComponentMut {
-                        coords: item,
-                        value,
-                    })
+                    let value: &mut T;
+                    if !tensor_ptr.is_null() {
+                        unsafe {
+                            value = (*tensor_ptr).at_ref_mut(&item).unwrap();
+                        }
+                        Some(TensorComponentMut {
+                            coords: item,
+                            value,
+                        })
+                    } else {
+                        None
+                    }
                 }
             },
             None => None,
@@ -918,9 +952,12 @@ impl<'a, T> Iterator for TensorEnumerator<'a, T> {
 }
 
 #[macro_export]
-/// Constructs a `Tensor`
+/// Constructs a `Tensor`. Handy when the values are know a priori.
+/// 
+/// ## Example
+/// The following code yields a tensor of shape (2, 2, 3) with the given values inside of it
 /// ```ignore
-/// tensor!((2, 2, 3) => [3, 3, 1, 2, 2, 2, 1, 1, 4, 5, 2, 4])
+/// tensor!((2, 2, 3) => [3, 3, 1, 2, 2, 2, 1, 1, 4, 5, 2, 4]);
 /// ```
 macro_rules! tensor {
     ( ( $( $dim:expr ),* ) => [ $( $x:expr ),* ] ) => {
