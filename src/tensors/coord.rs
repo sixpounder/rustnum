@@ -2,6 +2,7 @@ use std::{
     fmt::Display,
     ops::{Index, IndexMut},
     slice::Iter,
+    slice::IterMut
 };
 
 use crate::{Set, Shape};
@@ -33,6 +34,18 @@ impl Coord {
         }
 
         Self { axis: dimensions }
+    }
+
+    #[inline]
+    pub fn terminal(space: Shape) -> Self {
+        let mut coord = Self::new_for_shape(space.clone());
+        let mut i = 0;
+        for axis in coord.iter_axis_mut() {
+            *axis = space[i] - 1;
+            i += 1;
+        }
+
+        coord
     }
 
     #[inline]
@@ -74,6 +87,12 @@ impl Coord {
     #[inline]
     pub fn iter_axis(&self) -> Iter<'_, usize> {
         self.axis.iter()
+    }
+
+    /// An iterator over the coordinate components
+    #[inline]
+    pub fn iter_axis_mut(&mut self) -> IterMut<'_, usize> {
+        self.axis.iter_mut()
     }
 
     /// The cardinality of the coordinate (the multiplication of all its components)

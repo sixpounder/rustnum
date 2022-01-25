@@ -1,6 +1,6 @@
 use crate::{
     coord,
-    ops::{Dot, Stats},
+    ops::{Dot, Stats, AsVec},
     shape, Coord, CoordIterator, Set, Shape,
 };
 use num_traits::{Float, Num};
@@ -58,9 +58,15 @@ pub trait TensorLike<T> {
     fn size(&self) -> usize;
     fn at(&self, coords: Coord) -> Option<&T>;
     fn set(&mut self, coords: Coord, value: T) -> Result<(), TensorError>;
+
     fn first(&self) -> Option<&T> {
         self.at(Coord::zeroes(self.shape().ndim()))
     }
+
+    fn last(&self) -> Option<&T> {
+        self.at(Coord::terminal(self.shape()))
+    }
+
     fn is_scalar(&self) -> bool {
         self.shape().len() == 0
     }
@@ -415,11 +421,6 @@ impl<T> Tensor<T> {
             values: self.values,
         }
     }
-
-    /// Returns a flattened vector with all the tensor values copied inside it
-    pub fn to_vec(self) -> Vec<T> {
-        self.values
-    }
 }
 
 impl<T: Copy> Tensor<T> {
@@ -678,6 +679,14 @@ impl<T: Float> Stats for Tensor<T> {
         });
 
         m
+    }
+}
+
+impl<T> AsVec for Tensor<T> {
+    type Item = T;
+    /// Returns a flattened vector with all the tensor values copied inside it
+    fn to_vec(self) -> Vec<T> {
+        self.values
     }
 }
 

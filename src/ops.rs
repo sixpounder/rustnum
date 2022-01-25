@@ -28,6 +28,11 @@ where
     }
 }
 
+pub trait AsVec {
+    type Item;
+    fn to_vec(self) -> Vec<Self::Item>;
+}
+
 pub trait Trigo {
     type Output: ?Sized;
     fn sin(&self) -> Self::Output;
