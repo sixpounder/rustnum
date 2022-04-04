@@ -1,6 +1,7 @@
+use crate::prelude::*;
 use crate::ops::{BinomialTerm, Factorial};
 use crate::{activations, TensorLike};
-use crate::{coord, generators::density, shape, Coord, Shape, Tensor};
+use crate::{coord, generators::density, shape, Tensor};
 use num_traits::{Float, FloatConst, NumCast};
 use std::ops::Range;
 use std::{ops::Add, vec::Vec};

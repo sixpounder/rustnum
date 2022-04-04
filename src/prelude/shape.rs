@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::{CoordIterator, Set, Coord};
+use super::{CoordIterator, Set, Coord};
 use std::slice::Iter;
 use std::{
     fmt::Display,
@@ -347,8 +347,6 @@ macro_rules! shape {
 
 #[cfg(test)]
 mod test {
-    use crate::{shape, Coord};
-
     use super::*;
 
     #[test]

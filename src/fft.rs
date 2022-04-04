@@ -1,8 +1,6 @@
-use std::ops::Div;
-
-use num_traits::{Float, Num, Pow, real::Real};
-
-use crate::{coord, shape, Coord, Shape, Tensor, TensorLike, tensor};
+use crate::prelude::*;
+use num_traits::{Float, Num, Pow};
+use crate::{shape, Tensor, TensorLike, tensor};
 
 #[derive(Debug)]
 pub enum DCTType {
@@ -95,7 +93,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor;
+    use crate::{tensor, coord};
 
     #[test]
     fn dct1() {
@@ -104,7 +102,7 @@ mod tests {
         assert_eq!(values.first(), Some(&1.));
         assert_eq!(values.last(), Some(&4.));
         let dct = dct(values, DCTType::I);
-        println!("{}", dct);
+        assert_eq!(dct[coord!(0)], 5.5);
     }
 
     #[test]
@@ -114,6 +112,6 @@ mod tests {
         assert_eq!(values.first(), Some(&1.));
         assert_eq!(values.last(), Some(&4.));
         let dct = dct(values, DCTType::II);
-        println!("{}", dct);
+        assert_eq!(dct[coord!(0)], 20.);
     }
 }

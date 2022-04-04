@@ -5,7 +5,7 @@ use std::{
     slice::IterMut
 };
 
-use crate::{Set, Shape};
+use super::{Set, Shape};
 
 /// Represents a generic coordinate for a given space
 #[derive(Clone, Debug)]

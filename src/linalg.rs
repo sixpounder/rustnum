@@ -1,4 +1,5 @@
-use crate::{Coord, coord, Shape, Tensor, TensorComponent, TensorError, shape};
+use crate::prelude::*;
+use crate::{coord, Tensor, TensorComponent, TensorError, shape};
 use num_traits::Num;
 
 /// Performs matrix multiplication AxB.

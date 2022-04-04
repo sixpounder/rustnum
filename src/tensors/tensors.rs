@@ -1,7 +1,7 @@
+use crate::{prelude::*, shape};
 use crate::{
     coord,
-    ops::{Dot, Stats, AsVec},
-    shape, Coord, CoordIterator, Set, Shape,
+    ops::{Dot, Stats, AsVec}
 };
 use num_traits::{Float, Num};
 use std::{

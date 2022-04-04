@@ -10,6 +10,7 @@
 //! let range = rustnum::distributions::arange(-5.0..4.9, 0.1);
 //! ```
 #[macro_use]
+pub mod prelude;
 mod tensors;
 mod generators;
 mod core;
