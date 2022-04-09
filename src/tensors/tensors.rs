@@ -125,7 +125,8 @@ impl<T> TensorLike<T> for Vec<T> {
 ///
 /// ## Create a tensor, read and write values
 /// ```
-/// # use rustnum::{Tensor, shape, Shape, Coord, coord, TensorLike};
+/// # use rustnum::prelude::*;
+/// # use rustnum::{Tensor, shape, coord, TensorLike};
 /// let generator = |coord: Coord, counter: usize| {
 ///     // For example, make every number equal to
 ///     // the cardinality of the coordinate plus the counter
@@ -182,7 +183,8 @@ impl<T> TensorLike<T> for Tensor<T> {
 
     /// Sets the value at coordinates `coord`. If `coord` is not contained by this tensor it returns an error
     /// ```
-    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorError, TensorLike};
+    /// # use rustnum::prelude::*;
+    /// # use rustnum::{Tensor, TensorError, TensorLike, shape, coord};
     /// let mut t = Tensor::<u8>::new_uninit(shape!(4, 5, 6));
     /// assert_eq!(t[coord!(0, 0, 0)], 0);
     /// assert_ne!(t.set(coord!(0, 0, 0), 8), Err(TensorError::Set));
@@ -252,7 +254,8 @@ impl<T> Tensor<T> {
     /// or each access will resolve into undefined behavior.
     ///
     /// ```
-    /// # use rustnum::{Tensor, shape, coord, Shape, Coord, TensorLike};
+    /// # use rustnum::prelude::*;
+    /// # use rustnum::{Tensor, TensorLike, shape, coord};
     /// let empty: Tensor<f64> = Tensor::new_uninit(shape!(4, 7));
     /// assert!(empty.at(coord!(0, 0)).is_some());
     /// ```
@@ -265,7 +268,8 @@ impl<T> Tensor<T> {
     /// Creates a new tensor with a value generator
     /// # Example
     /// ```
-    /// # use rustnum::{Tensor, shape, Shape, Coord, TensorLike};
+    /// # use rustnum::prelude::*;
+    /// # use rustnum::{Tensor, shape, TensorLike};
     ///
     /// let tensor: Tensor<f64> = Tensor::new(
     ///     shape!(3, 4, 10),
@@ -439,7 +443,8 @@ impl<T: Default> Tensor<T> {
     /// all tensor values will be `T::default()`
     /// # Example
     /// ```
-    /// # use rustnum::{Tensor, shape, Shape, Coord, TensorLike};
+    /// # use rustnum::prelude::*;
+    /// # use rustnum::{Tensor, shape, TensorLike};
     /// let generator = |coord: Coord, counter: usize| {
     ///     // For example, make every number equal to
     ///     // the cardinality of the coordinate plus the counter

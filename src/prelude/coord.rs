@@ -166,7 +166,8 @@ impl<'a> CoordIterator<'a> {
     /// Creates a new coordinate iterator for a given `Shape`, starting at the shape origin
     /// # Example
     /// ```
-    /// # use rustnum::{shape, Shape, Coord};
+    /// # use rustnum::prelude::*;
+    /// # use rustnum::{shape};
     /// let s = shape!(3, 5, 3);
     /// let mut iter_one = s.iter().take(1);
     /// assert_eq!(iter_one.next(), Some(Coord::new(vec![0, 0, 0])));

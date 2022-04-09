@@ -1,5 +1,7 @@
 use num_traits::{Num, Zero};
 
+pub type Binop<T> = fn(x: T, y: T) -> T;
+
 pub trait Stats {
     type Output;
 
@@ -53,6 +55,7 @@ impl<T: Num + Factorial> BinomialTerm for (T, T) {
 }
 
 pub trait Factorial {
+    /// Computes the factorial of `self`. **Panics** if `self < 0`.
     fn factorial(&self) -> Self;
 }
 
@@ -61,6 +64,10 @@ macro_rules! impl_factorial {
         $(
             impl Factorial for $t {
                 fn factorial(&self) -> Self {
+                    if self < &0 {
+                        panic!("Factorial is not defined for negative numbers");
+                    }
+
                     if self.is_zero() {
                         1
                     } else {

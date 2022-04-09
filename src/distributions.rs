@@ -32,9 +32,10 @@ pub fn normal<T: 'static + Default + Float + FloatConst>(
 /// by `step`
 /// # Example
 /// ```
+/// # use rustnum::prelude::*;
 /// # use std::ops::{Add, Range};
 /// # use rustnum::distributions::arange;
-/// # use rustnum::{Tensor, shape, Shape, TensorLike};
+/// # use rustnum::{Tensor, TensorLike, shape};
 /// let mut ranged_values: Tensor<f64> = arange(0.0..9.9, 0.1);
 /// // Tensor [0.0, 0.1, 0.2 .... 100.0]
 /// assert_eq!(ranged_values.size(), 100);
@@ -75,7 +76,8 @@ where
 ///
 /// # Example
 /// ```
-/// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
+/// # use rustnum::prelude::*;
+/// # use rustnum::{Tensor, TensorLike, coord};
 /// use rustnum::distributions;
 /// let dist = distributions::poisson(0..5, 1, 2.5);
 /// assert_eq!(dist.size(), 5);
@@ -140,8 +142,9 @@ fn binomial_core(n: u64, k: u64, p: f64) -> f64 {
 /// or failure (with probability `q = 1 − p`).
 /// # Example
 /// ```
+/// # use rustnum::prelude::*;
 /// # use rustnum::distributions::binomial;
-/// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
+/// # use rustnum::{Tensor, TensorLike, coord};
 /// let dist = binomial(5..7, 20, 0.3);
 /// assert_eq!(dist.size(), 2);
 /// assert_eq!(dist[coord!(0)], 0.1788630505698795);
@@ -171,8 +174,9 @@ fn geometric_core(p: f64, x: u64) -> f64 {
 /// of failures before experiencing the first success in a series of Bernoulli trials.
 /// # Example
 /// ```
+/// # use rustnum::prelude::*;
 /// # use rustnum::distributions::geometric;
-/// # use rustnum::{Tensor, shape, Shape, coord, Coord, TensorLike};
+/// # use rustnum::{Tensor, TensorLike, coord};
 /// let dist = geometric(0..4, 0.5);
 /// assert_eq!(dist.size(), 4);
 /// assert_eq!(dist[coord!(0)], 0.5);
