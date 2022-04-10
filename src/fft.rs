@@ -103,6 +103,7 @@ mod tests {
         assert_eq!(values.last(), Some(&4.));
         let dct = dct(values, DCTType::I);
         assert_eq!(dct[coord!(0)], 5.5);
+        assert_eq!(dct[coord!(1)].trunc(), -1.0);
     }
 
     #[test]

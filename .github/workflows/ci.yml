@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   build:
-    name: rustnum-build
+    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -16,7 +16,7 @@ jobs:
           command: build
           args: --release --all-features
   test:
-    name: rustnum-test
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
