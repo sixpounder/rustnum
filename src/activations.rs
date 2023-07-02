@@ -1,5 +1,4 @@
-///! Collection of classic ML activation functions
-/// 
+//! Collection of classic ML activation functions
 use num_traits::{Float, FloatConst, Num};
 
 pub fn max<N>(x: N, y: N) -> N where N: Num + PartialOrd {

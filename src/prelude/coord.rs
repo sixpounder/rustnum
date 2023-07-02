@@ -2,7 +2,7 @@ use std::{
     fmt::Display,
     ops::{Index, IndexMut},
     slice::Iter,
-    slice::IterMut
+    slice::IterMut,
 };
 
 use super::{Set, Shape};
@@ -17,7 +17,7 @@ impl Coord {
     /// Creates a new coordinate with `axis` as its components
     #[inline]
     pub fn new(axis: Vec<usize>) -> Self {
-        Self { axis: axis }
+        Self { axis }
     }
 
     #[inline]
@@ -28,21 +28,15 @@ impl Coord {
     /// Creates a new coordinate of `n_dimensions` component set to `0`
     #[inline]
     pub fn zeroes(n_dimensions: usize) -> Self {
-        let mut dimensions = Vec::with_capacity(n_dimensions);
-        for _ in 0..n_dimensions {
-            dimensions.push(0);
-        }
-
+        let dimensions = vec![0; n_dimensions];
         Self { axis: dimensions }
     }
 
     #[inline]
     pub fn terminal(space: Shape) -> Self {
         let mut coord = Self::new_for_shape(space.clone());
-        let mut i = 0;
-        for axis in coord.iter_axis_mut() {
+        for (i, axis) in coord.iter_axis_mut().enumerate() {
             *axis = space[i] - 1;
-            i += 1;
         }
 
         coord
@@ -100,7 +94,7 @@ impl Coord {
     pub fn cardinality(&self) -> usize {
         let mut cardinality = 1;
         self.axis.iter().for_each(|i| {
-            cardinality = cardinality * i;
+            cardinality *= i;
         });
         cardinality
     }
@@ -208,7 +202,7 @@ impl<'a> CoordIterator<'a> {
             while let Some(coordinate) = self.current.get_axis_mut(i) {
                 if *coordinate < (self.space[i] - 1) {
                     // Can move on this axis
-                    *coordinate = *coordinate + 1;
+                    *coordinate += 1;
 
                     // If the axis is NOT the last one, we must reset all contained axis
                     if i < shape_last_index {
@@ -219,16 +213,14 @@ impl<'a> CoordIterator<'a> {
                     }
 
                     break;
+                } else if i == 0 {
+                    // Axis is done and there are no more axis, shape ended
+                    end_of_shape = true;
+                    break;
                 } else {
-                    if i == 0 {
-                        // Axis is done and there are no more axis, shape ended
-                        end_of_shape = true;
-                        break;
-                    } else {
-                        // Axis is done, check the next one
-                        i -= 1;
-                        continue;
-                    }
+                    // Axis is done, check the next one
+                    i -= 1;
+                    continue;
                 }
             }
 
@@ -261,12 +253,7 @@ macro_rules! coord {
     };
     ( $( $x:expr ),* ) => {
         {
-            let mut dims = Vec::<usize>::new();
-            $(
-                dims.push($x);
-            )*
-            let o = Coord::new(dims);
-            o
+            Coord::new(vec![$($x),*])
         }
     };
 }

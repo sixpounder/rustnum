@@ -12,14 +12,12 @@ pub enum DCTType {
 
 pub fn dct(x: Tensor<f64>, dct_type: DCTType) -> Tensor<f64> {
     if x.size() == 0 {
-        return tensor!(() => []);
+        return tensor!();
     }
 
     let mut dct_tensor: Tensor<f64> = Tensor::new_uninit(shape!(x.size()));
-    let mut i: usize = 0;
-    for component in x.iter() {
+    for (i, component) in x.iter().enumerate() {
         dct_tensor[component.coords] = dct_core(&x, i as u32, &dct_type);
-        i += 1;
     }
 
     dct_tensor
@@ -62,11 +60,9 @@ fn dct_2(x: &Tensor<f64>, k: u32) -> f64 {
     let upper_n = x.size() as f64;
     let pi_over_n = pi / upper_n;
 
-    let mut n: usize = 0;
     let mut sum: f64 = 0.;
-    for xn in x.iter() {
+    for (n, xn) in x.iter().enumerate() {
         sum += *xn.value * (pi_over_n * (k as f64) * ((n as f64) + 0.5)).cos();
-        n += 1;
     }
 
     sum * 2.

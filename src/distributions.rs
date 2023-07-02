@@ -131,9 +131,7 @@ fn binomial_core(n: u64, k: u64, p: f64) -> f64 {
     let binomial_term: f64 = (n, k).binomial_term() as f64;
     let p_to_k = p.powi(k as i32);
     let one_minus_p_to_n_minus_k = one_minus_p.powi((n - k) as i32);
-    let value = p_to_k * one_minus_p_to_n_minus_k * binomial_term;
-
-    value
+    p_to_k * one_minus_p_to_n_minus_k * binomial_term
 }
 
 /// The binomial distribution with parameters `n` and `p` is the discrete probability distribution

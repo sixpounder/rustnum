@@ -74,7 +74,7 @@ impl<T: Num> Zero for Complex<T> {
     }
 
     fn is_zero(&self) -> bool {
-        return self.re.is_zero() && self.im.is_zero()
+        self.re.is_zero() && self.im.is_zero()
     }
 }
 
@@ -186,7 +186,7 @@ where
     /// have a sqrt function), i.e. `re^2 + im^2`.
     #[inline]
     pub fn norm_sqr(self) -> T {
-        self.re.clone() * self.re.clone() + self.im.clone() * self.im
+        self.re * self.re + self.im * self.im
     }
 
     /// Computes 1 / self
@@ -199,7 +199,7 @@ where
     #[inline]
     pub fn inv(self) -> Self {
         let norm_sqr = self.norm_sqr();
-        Self::new(self.re / norm_sqr.clone(), -self.im / norm_sqr)
+        Self::new(self.re / norm_sqr, -self.im / norm_sqr)
     }
 
     /// Multiplicates two complex numbers. Used for the std::ops::Mul implementation.
@@ -207,8 +207,8 @@ where
     pub fn complex_mul(&self, other: Self) -> Self {
         // c1 * c2 = (c1.real * c2.real - c1.imm * c2.imm) + (c1.real * c2.imm + c1.imm * c2.real)i
         Self {
-            re: (self.re.clone() * other.re.clone()) - (self.im.clone() * other.im.clone()),
-            im: (self.re.clone() * other.im) + (self.im.clone() * other.re),
+            re: (self.re * other.re) - (self.im * other.im),
+            im: (self.re * other.im) + (self.im * other.re),
         }
     }
 

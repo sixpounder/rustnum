@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use super::{CoordIterator, Set, Coord};
+use super::{Coord, CoordIterator, Set};
 use std::slice::Iter;
 use std::{
     fmt::Display,
@@ -66,10 +66,7 @@ impl Shape {
     /// Creates a shape with `n_dimensions` set to 0
     #[inline]
     pub fn zeroes(n_dimensions: usize) -> Self {
-        let mut dimensions = Vec::with_capacity(n_dimensions);
-        for _ in 0..n_dimensions {
-            dimensions.push(0);
-        }
+        let dimensions = vec![0; n_dimensions];
 
         let scale_factors = compute_scale_factors(&dimensions);
 
@@ -86,8 +83,13 @@ impl Shape {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.dimensions.is_empty()
+    }
+
+    #[inline]
     pub fn is_scalar(&self) -> bool {
-        self.len() == 0
+        self.is_empty()
     }
 
     pub fn axis_scale_factor(&self, axis: usize) -> Option<&usize> {
@@ -116,7 +118,7 @@ impl Shape {
         let mut coord = Coord::zeroes(self.ndim());
         let mut rng = rand::thread_rng();
         for dim in 0..self.ndim() {
-            coord[dim] = rng.gen_range(0,self.dimensions[dim]);
+            coord[dim] = rng.gen_range(0, self.dimensions[dim]);
         }
 
         coord
@@ -149,22 +151,22 @@ impl Shape {
     /// Returns a new `Shape` with all but the first axis
     #[inline]
     pub fn tail(&self) -> Shape {
-        let slice: &[usize];
-        if self.len() > 1 {
-            slice = self.dimensions[1..self.dimensions.len()].as_ref();
+        let slice: &[usize] = if self.len() > 1 {
+            self.dimensions[1..self.dimensions.len()].as_ref()
         } else {
-            slice = &[];
-        }
+            &[]
+        };
+
         Shape::from(slice)
     }
 
     /// Returns a new `Shape` with only the first axis (or an empty one if the original shape is empty)
     #[inline]
     pub fn head(&self) -> Shape {
-        if self.len() > 0 {
-            Shape::new(vec![self.dimensions[0]])
-        } else {
+        if self.is_empty() {
             Shape::empty()
+        } else {
+            Shape::new(vec![self.dimensions[0]])
         }
     }
 
@@ -205,7 +207,7 @@ impl Shape {
     pub fn cardinality(&self) -> usize {
         let mut p = 1;
         self.dimensions.iter().for_each(|i| {
-            p = p * i;
+            p *= i;
         });
         p
     }
@@ -285,8 +287,8 @@ impl Mul<Shape> for Shape {
 
     fn mul(self, rhs: Shape) -> Self::Output {
         let mut dims: Vec<usize> = vec![];
-        for i in 0..self.size() {
-            dims[i] = self.dimensions[i] * rhs.dimensions[i];
+        for (i, item) in dims.iter_mut().enumerate().take(self.size()) {
+            *item = self.dimensions[i] * rhs.dimensions[i];
         }
 
         let scale_factors = compute_scale_factors(&dims);
@@ -335,12 +337,7 @@ macro_rules! shape {
     };
     ( $( $x:expr ),* ) => {
         {
-            let mut dims = Vec::<usize>::new();
-            $(
-                dims.push($x);
-            )*
-            let o = Shape::new(dims);
-            o
+            Shape::new(vec![$($x),*])
         }
     };
 }

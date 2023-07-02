@@ -73,7 +73,7 @@ macro_rules! impl_factorial {
                     } else {
                         let mut acc: Self = 1;
                         for i in 2..=*self {
-                            acc = acc * i;
+                            acc *= i;
                         }
 
                         acc

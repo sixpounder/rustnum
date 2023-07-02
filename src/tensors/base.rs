@@ -1,12 +1,11 @@
-use crate::{prelude::*, shape};
 use crate::{
     coord,
-    ops::{Dot, Stats, AsVec}
+    ops::{AsVec, Dot, Stats},
 };
+use crate::{prelude::*, shape};
 use num_traits::{Float, Num};
 use std::{
     any::Any,
-    cmp::Ordering,
     fmt::{Display, Formatter},
     ops::{Add, Index, IndexMut, Mul},
 };
@@ -43,10 +42,8 @@ impl<T> From<std::result::Result<T, Box<dyn Any + Send + 'static>>> for TensorEr
 #[inline]
 fn pos_for(shape: &Shape, coords: &Coord) -> usize {
     let mut idx = 0;
-    let mut axis_index: usize = 0;
-    for axis in coords.iter_axis() {
+    for (axis_index, axis) in coords.iter_axis().enumerate() {
         idx += shape.axis_cardinality(axis_index).unwrap_or(&0) * axis;
-        axis_index += 1;
     }
 
     idx
@@ -68,7 +65,7 @@ pub trait TensorLike<T> {
     }
 
     fn is_scalar(&self) -> bool {
-        self.shape().len() == 0
+        self.shape().is_empty()
     }
 }
 
@@ -215,30 +212,45 @@ impl<T> TensorLike<T> for Tensor<T> {
 }
 
 impl<T> Tensor<T> {
+
+    #[allow(clippy::uninit_vec)]
     fn make_tensor<G>(shape: Shape, generator: G) -> Tensor<T>
     where
         G: Fn(Coord, usize) -> T,
     {
         let shape_card = shape.cardinality();
-        let mut values: Vec<T> = Vec::with_capacity(shape_card);
 
-        // `set_len` unsafe, but fast
+        // `values` need to be entirely sized **before** setting elements on it, since we do not
+        // know the order of insertions a-priori
+        let mut values: Vec<T> = Vec::with_capacity(shape_card);
+        
+        // `set_len` is unsafe, but fast
         unsafe {
             values.set_len(shape_card);
         }
-        let mut counter: usize = 0;
+
+        let mut counter = 0;
         for i in shape.iter() {
             let position = pos_for(&shape, &i);
             values[position] = generator(i, counter);
             counter += 1;
         }
 
-        let out_tensor: Tensor<T> = Tensor {
-            shape: shape.clone(),
-            values,
-        };
+        // It is important that all positions are actually assigned values, or
+        // the previous set_len will lead to undefined behavior.
+        assert_eq!(counter, values.len());
 
-        out_tensor
+        Tensor {
+            shape,
+            values,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            shape: shape!(),
+            values: vec![],
+        }
     }
 
     pub fn scalar(value: T) -> Self {
@@ -315,7 +327,7 @@ impl<T> Tensor<T> {
     /// Gets the value at coordinates `coord`, if any
     #[inline]
     pub fn at_ref(&self, coords: &Coord) -> Option<&T> {
-        let idx = self.index_for_coords(&coords);
+        let idx = self.index_for_coords(coords);
         match idx {
             Some(index) => self.values.get(index),
             None => None,
@@ -336,7 +348,7 @@ impl<T> Tensor<T> {
     /// moved value. The returned reference is mutable.
     #[inline]
     pub fn at_ref_mut(&mut self, coords: &Coord) -> Option<&mut T> {
-        let idx = self.index_for_coords(&coords);
+        let idx = self.index_for_coords(coords);
         match idx {
             Some(index) => self.values.get_mut(index),
             None => None,
@@ -395,13 +407,13 @@ impl<T> Tensor<T> {
     // /// ```ignore
     // /// let mat1 = tensor!((5, 5) => [1, 2, 3, 4, 5, 6, 7, 8, 9 ..., 21, 22, 24, 24, 25])
     // /// ```
-    // /// 
+    // ///
     // /// ... and you want to iter by columns instead of rows:
-    // /// 
+    // ///
     // /// ```ignore
     // /// mat1.iter_axis(1)
     // /// ```
-    // /// 
+    // ///
     // /// will yield: 1, 6, 11, 16, 21, 2, 7 and so on
     // pub fn iter_axis(&self, axis: usize) -> TensorAxisIterator<T> {
     //     // self.iter().step_by(*self.shape().axis_scale_factor(axis).unwrap_or(&0))
@@ -412,7 +424,7 @@ impl<T> Tensor<T> {
     /// with the number of values contained by the current one.
     pub fn reshape(&mut self, t_shape: Shape) {
         if self.shape.equiv(&t_shape) {
-            self.shape = t_shape.clone();
+            self.shape = t_shape;
         }
     }
 
@@ -546,7 +558,7 @@ where
             for item in self.iter() {
                 let coord = item.coords.clone();
                 out_tensor
-                    .set(item.coords, (*item.value * *rhs.at(coord).unwrap()).into())
+                    .set(item.coords, *item.value * *rhs.at(coord).unwrap())
                     .unwrap();
             }
         }
@@ -559,7 +571,7 @@ impl<T: Copy + std::ops::Add<Output = T>> Add<T> for Tensor<T> {
     type Output = Tensor<T>;
 
     fn add(self, rhs: T) -> Self::Output {
-        let mut out_tensor = self.clone();
+        let mut out_tensor = self;
         for item in out_tensor.iter_mut() {
             *item.value = *item.value + rhs;
         }
@@ -729,13 +741,7 @@ impl<T: Ord> PartialOrd for TensorComponent<'_, T> {
 
 impl<T: PartialEq + Ord> Ord for TensorComponent<'_, T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if *self.value < *other.value {
-            std::cmp::Ordering::Less
-        } else if *self.value > *other.value {
-            Ordering::Greater
-        } else {
-            Ordering::Equal
-        }
+        self.value.cmp(other.value)
     }
 }
 
@@ -813,7 +819,7 @@ impl<'a, T> TensorIteratorMut<'a, T> {
     pub fn reset(&mut self) {
         let t_shape;
         unsafe {
-            t_shape = (&*self.tensor).shape_ref();
+            t_shape = (*self.tensor).shape_ref();
         }
         let coord_iter = CoordIterator::new(t_shape);
         self.coord_iter = coord_iter;
@@ -843,16 +849,8 @@ impl<'a, T: 'a> Iterator for TensorIteratorMut<'a, T> {
                         None
                     }
                 }
-            },
+            }
             None => None,
-        }
-    }
-}
-
-impl<T> Drop for TensorIteratorMut<'_, T> {
-    fn drop(&mut self) {
-        if !self.tensor.is_null() {
-            drop(self.tensor);
         }
     }
 }
@@ -873,15 +871,12 @@ pub struct TensorEnumerator<'a, T> {
 
 impl<'a, T> TensorEnumerator<'a, T> {
     pub fn new(source: &'a Tensor<T>) -> Self {
-        let mut start_flags = Vec::new();
         let size: usize = match source.shape().size() {
             0 => 1,
             _ => source.shape().size(),
         };
 
-        for _ in 0..size {
-            start_flags.push(false);
-        }
+        let start_flags = vec![false; size];
 
         TensorEnumerator {
             tensor: source,
@@ -943,7 +938,7 @@ impl<'a, T> TensorEnumerator<'a, T> {
                     self.start_flags[0] = true;
                     Some(EnumerationPoint::Terminal(TensorComponent {
                         coords: coord!(0),
-                        tensor: &self.tensor,
+                        tensor: self.tensor,
                         value: self.tensor.first().unwrap(),
                     }))
                 }
@@ -966,25 +961,28 @@ impl<'a, T> Iterator for TensorEnumerator<'a, T> {
 
 #[macro_export]
 /// Constructs a `Tensor`. Handy when the values are know a priori.
-/// 
+///
 /// ## Example
 /// The following code yields a tensor of shape (2, 2, 3) with the given values inside of it
-/// 
+///
 /// ```ignore
 /// tensor!((2, 2, 3) => [3, 3, 1, 2, 2, 2, 1, 1, 4, 5, 2, 4]);
 /// ```
-/// 
+///
 /// Scalar tensors can be constructed with the simplified form
-/// 
+///
 /// ```ignore
 /// tensor!(2)
 /// ```
-/// 
+///
 /// ## Panics
-/// 
+///
 /// The macro will panic if the cardinality of the shape doesn't match the number of values
 /// given as input - the ones to the right of `=>`
 macro_rules! tensor {
+    () => {
+        Tensor::empty()
+    };
     ( $value:expr ) => {
         Tensor::scalar($value)
     };
@@ -1203,7 +1201,10 @@ mod test {
     #[test]
     fn cast() {
         let tensor1 = tensor!((1, 3, 2) => [ false, true, true, true, false, true ]);
-        assert_eq!(tensor1.cast::<u8>(), tensor!((1, 3, 2) => [ 0, 1, 1, 1, 0, 1 ]))
+        assert_eq!(
+            tensor1.cast::<u8>(),
+            tensor!((1, 3, 2) => [ 0, 1, 1, 1, 0, 1 ])
+        )
     }
 
     #[test]

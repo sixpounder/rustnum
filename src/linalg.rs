@@ -15,12 +15,11 @@ pub fn matmul<T: Num + Copy>(a: Tensor<T>, b: Tensor<T>) -> Result<Tensor<T>, Te
     if a.shape_ref().len() > 2 || b.shape_ref().len() > 2 {
         Err(TensorError::NotSupported)
     } else {
-        let target_shape: Shape;
-        if a_shape[1] == b_shape[0] {
-            target_shape = shape!(a_shape[0], b_shape[1]);
+        let target_shape: Shape = if a_shape[1] == b_shape[0] {
+            shape!(a_shape[0], b_shape[1])
         } else {
             return Err(TensorError::IncompatibleShape);
-        }
+        };
 
         let mut out_tensor = Tensor::<T>::new_uninit(target_shape.clone());
 
